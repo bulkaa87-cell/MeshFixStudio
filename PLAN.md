@@ -202,8 +202,9 @@ A change:
    systems.
 2. Change the version in `crates/meshfix/Cargo.toml`, `crates/foamview/Cargo.toml`,
    the `__version__` lines and `app/meshfix_studio/__init__.py`.
-3. Push a tag `vX.Y.Z`. CI makes a DRAFT release with the installers and
-   the wheels. Examine it, then publish it.
+3. Write `RELEASE_NOTES.md`, then push a tag `vX.Y.Z`. CI publishes the
+   release with the installers and the wheels of the rows that passed. Its
+   notes name the systems whose build failed.
 4. In OFS: change the version in the two pin lines, `pip install -r
    requirements.txt`, run the OFS tests of the repair and of the 3D view.
    Commit: "Use meshfix-core X.Y.Z".
@@ -282,8 +283,10 @@ The installers:
   (Mesa) on Linux, the paravirtual Metal GPU or the CPU renderer on macOS.
   The test of the built program on Linux runs under Xvfb with the xcb
   platform of Qt: it then also finds a missing system library.
-- Job `release` (tags only): a DRAFT GitHub Release with the installers
-  and the wheels. A person publishes it.
+- Job `release` (tags only): a GitHub Release with the installers and
+  the wheels of the rows that passed, and `RELEASE_NOTES.md` as the text.
+  A failed row does not stop the release: the notes name the missing
+  system.
 - `macos-15-intel` is the Intel runner label of GitHub in 2026. If GitHub
   removes it, remove the row: Intel Macs then use an older release.
 

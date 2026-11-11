@@ -192,18 +192,38 @@ jobs:
 
   release:
     name: GitHub Release
-    if: startsWith(github.ref, 'refs/tags/v')
+    # Also when a row of the matrix failed: the release then has the
+    # installers of the rows that passed, and its notes name the missing
+    # systems. Not when the run was cancelled.
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/v') }}
     needs: build
     runs-on: ubuntu-22.04
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+      - name: Release notes and the list of files
+        run: |
+          mkdir -p release
+          find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.whl' \) -exec cp {} release/ \;
+          ls -l release
+          cp RELEASE_NOTES.md notes.md
+          missing=""
+          ls release/*windows-x64-setup.exe >/dev/null 2>&1 || missing="$missing Windows x64,"
+          ls release/*macos-arm64.dmg >/dev/null 2>&1 || missing="$missing macOS arm64,"
+          ls release/*macos-x86_64.dmg >/dev/null 2>&1 || missing="$missing macOS x86_64,"
+          ls release/*linux-x86_64.AppImage >/dev/null 2>&1 || missing="$missing Linux x86_64,"
+          if [ -n "$missing" ]; then
+            printf '\n## Not in this release\n\nThe build of these systems failed:%s. They come in a later release.\n' "${missing%,}" >> notes.md
+          fi
+          cat notes.md
       - uses: softprops/action-gh-release@v2
         with:
-          draft: true
-          files: |
-            artifacts/installer-*/*
-            artifacts/wheels-*/*.whl
+          draft: false
+          prerelease: false
+          body_path: notes.md
+          fail_on_unmatched_files: false
+          files: release/*
