@@ -75,8 +75,9 @@ jobs:
       - name: Linux packages (Qt, Mesa llvmpipe and lavapipe, Xvfb)
         if: matrix.target == 'linux'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          # The runner DNS fails sometimes: try again.
+          for i in 1 2 3; do sudo apt-get update && break; sleep 20; done
+          sudo apt-get install -y --no-install-recommends -o Acquire::Retries=5 \
             libegl1 libgl1 libgl1-mesa-dri mesa-vulkan-drivers libvulkan1 \
             libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
             libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
