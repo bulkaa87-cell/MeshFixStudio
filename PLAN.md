@@ -327,9 +327,10 @@ The method «Windows» (`winfix`, the Printing3D service through pywinrt):
 
 ## 13. Next steps
 
-1. The first CI run: fix what fails on macOS and Linux.
-2. A first release `v0.1.0` (draft) when CI is green on all four rows.
-3. T31 into `crates/meshfix` (section 8).
-4. The switch of OFS (section 5), in one OFS branch, with the OFS tests.
-5. Translate the Ukrainian code comments of the staging copy to English.
-6. Make the build smaller (section 6).
+The release v0.1.0 is out (2026-11-11), with the files of all four
+systems. CI is green on all four rows.
+
+1. T31 into `crates/meshfix` (section 8).
+2. The switch of OFS (section 5), in one OFS branch, with the OFS tests.
+3. Translate the Ukrainian code comments of the staging copy to English.
+4. Make the build smaller (section 6).

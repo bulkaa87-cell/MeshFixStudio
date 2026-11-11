@@ -17,13 +17,23 @@ keep it as a changelog.
    AppImage script, icons drawn at build time, the CI workflow.
 5. PLAN.md (the design), README.md, CONTRIBUTING.md.
 
+6. Release v0.1.0 (2026-11-11):
+   https://github.com/bulkaa87-cell/MeshFixStudio/releases/tag/v0.1.0
+   Windows installer 107 MB (installed per user, started, repaired, and
+   removed again on Windows 10), macOS arm64 dmg 124 MB, macOS x86_64 dmg
+   146 MB, Linux AppImage 235 MB, and the wheels of all four systems. The
+   Linux files come from the build of 5d33e7f (the tag build did not get the
+   Linux packages; the program code is the same).
+7. CI: all four rows green on main (5d33e7f).
+
 ## Next
 
-1. The first CI run on GitHub: fix what fails on macOS and Linux.
-2. A draft release v0.1.0 when all four CI rows are green.
-3. Port the T31 change of OpenFOAM Studio (STL-safe output) into
+1. Port the T31 change of OpenFOAM Studio (STL-safe output) into
    `crates/meshfix` (PLAN.md, section 8).
-4. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section 5).
+2. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section 5).
+3. Make the program smaller (PLAN.md, section 6).
+4. Test the macOS and Linux files on real computers (CI tests them only
+   on the runners, without a real GPU).
 
 ## How to test (Windows)
 
