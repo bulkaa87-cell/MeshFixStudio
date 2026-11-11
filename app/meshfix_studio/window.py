@@ -909,12 +909,74 @@ def run(app, win, grace_ms: int = CLOSE_GRACE_MS) -> None:
     end_process(win, rc, grace_ms=grace_ms, settings=win.store)
 
 
+def _stdout_for_child() -> None:
+    """A frozen GUI program (console=False) starts with sys.stdout None.
+    A probe child must write its result line to the pipe of the parent:
+    open the standard output handle that the parent gave."""
+    if sys.stdout is not None:
+        return
+    try:
+        sys.stdout = open(1, "w", encoding="utf-8", closefd=False)
+        return
+    except OSError:
+        pass
+    if os.name == "nt":
+        try:
+            import ctypes
+            import msvcrt
+            handle = ctypes.windll.kernel32.GetStdHandle(-11)
+            fd = msvcrt.open_osfhandle(handle, os.O_WRONLY)
+            sys.stdout = open(fd, "w", encoding="utf-8", closefd=False)
+        except OSError:
+            pass
+
+
+def smoke_test(win, app, src: str, out: str) -> int:
+    """«--smoke-test IN OUT»: open IN, repair it with meshfix, export OUT,
+    read OUT again, and write the result to OUT + ".json". Exit code 0
+    when the repaired mesh is clean and the file has the same counts.
+    The installers run this check on each operating system (CI)."""
+    import json
+
+    def wait(limit_s: float = 600.0) -> bool:
+        end = time.monotonic() + limit_s
+        while win.busy_now and time.monotonic() < end:
+            app.processEvents(QtCore.QEventLoop.AllEvents, 50)
+            time.sleep(0.01)
+        return not win.busy_now
+
+    res: dict = {"level": win.lbl_3d.text(), "ok": False}
+    try:
+        win.open_file(src)
+        res["loaded"] = wait() and win.state is not None
+        if res["loaded"]:
+            res["before"] = fs_repair.counts(win.state.diag)
+            res["repair_started"] = win.repair(fs_repair.DEFAULT)
+            res["repaired"] = wait()
+            res["after"] = fs_repair.counts(win.state.diag)
+            res["closed"] = bool(win.state.diag.closed)
+            path = win.export_file(out)
+            wait()
+            check = win.export_check
+            res["exported"] = path is not None
+            res["file"] = fs_repair.counts(check) if check else None
+            res["ok"] = bool(res["repaired"] and res["closed"]
+                             and fs_repair.clean(win.state.diag)
+                             and res["file"] == res["after"])
+    except Exception as exc:                              # noqa: BLE001
+        res["error"] = f"{type(exc).__name__}: {exc}"
+    with open(out + ".json", "w", encoding="utf-8") as fh:
+        json.dump(res, fh, ensure_ascii=False, indent=1)
+    return 0 if res["ok"] else 1
+
+
 def main(argv=None):
     argv = list(sys.argv if argv is None else argv)
     from foamview import level
     if argv[1:2] == ["--foamview-probe"]:
         # A child process of foamview.level: probe one renderer and exit.
         # In the frozen program, sys.executable is this program.
+        _stdout_for_child()
         sys.exit(level.probe_main(argv[2:]))
     level.configure(app_name=APP_NAME)
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts)
@@ -924,6 +986,11 @@ def main(argv=None):
     start_language()
     win = MeshFixWindow()
     win.show()
+    if argv[1:2] == ["--smoke-test"] and len(argv) >= 4:
+        rc = smoke_test(win, app, argv[2], argv[3])
+        win.close()
+        end_process(win, rc, grace_ms=CLOSE_GRACE_MS, settings=win.store)
+        return
     if len(argv) > 1 and os.path.isfile(argv[1]):
         win.open_file(argv[1])
     run(app, win)

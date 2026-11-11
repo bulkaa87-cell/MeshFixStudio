@@ -20,7 +20,6 @@ os.environ.setdefault("QT_API", "pyside6")
 import numpy as np
 import pyvista as pv
 from PySide6 import QtCore, QtWidgets
-from pyvistaqt import QtInteractor
 
 from meshfix import check as geo
 from meshfix.i18n import tr
@@ -252,6 +251,9 @@ class Viewport(QtWidgets.QWidget):
             self._set_level(lv)
         except Exception as exc:                          # noqa: BLE001
             self.backend_note = str(exc)
+        # VTK draws: pyvistaqt (and pyvista.plotting, which needs
+        # matplotlib) is imported only now, not at the start.
+        from pyvistaqt import QtInteractor
         return QtInteractor(self)
 
     def _set_level(self, lv):
