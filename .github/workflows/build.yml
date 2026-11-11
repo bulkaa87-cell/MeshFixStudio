@@ -82,7 +82,9 @@ jobs:
         run: |
           # Use the main Ubuntu mirror, with short timeouts.
           if [ -f /etc/apt/apt-mirrors.txt ]; then
-            printf 'http://archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://security.ubuntu.com/ubuntu/\n' | sudo tee /etc/apt/apt-mirrors.txt
+            # The runner did not resolve the ubuntu.com names (2026-11-11):
+            # a mirror on another domain comes first.
+            printf 'http://mirrors.edge.kernel.org/ubuntu/\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\nhttp://security.ubuntu.com/ubuntu/\n' | sudo tee /etc/apt/apt-mirrors.txt
           fi
           APT="-o Acquire::Retries=1 -o Acquire::http::Timeout=15"
           for i in 1 2 3; do sudo apt-get $APT update && break; sleep 20; done
