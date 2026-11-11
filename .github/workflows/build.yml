@@ -79,9 +79,7 @@ jobs:
           # The Azure mirror of the runner did not resolve (2026-11-11): use
           # the main Ubuntu mirror, with short timeouts and retries.
           if [ -f /etc/apt/apt-mirrors.txt ]; then
-            printf 'http://archive.ubuntu.com/ubuntu/	priority:1
-http://security.ubuntu.com/ubuntu/
-' | sudo tee /etc/apt/apt-mirrors.txt
+            printf 'http://archive.ubuntu.com/ubuntu/\tpriority:1\nhttp://security.ubuntu.com/ubuntu/\n' | sudo tee /etc/apt/apt-mirrors.txt
           fi
           APT="-o Acquire::Retries=3 -o Acquire::http::Timeout=30"
           for i in 1 2 3; do sudo apt-get $APT update && break; sleep 20; done
