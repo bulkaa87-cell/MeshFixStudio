@@ -46,7 +46,9 @@ packaging/
   windows/meshfix_studio.iss   Inno Setup
   macos/make_dmg.sh         .app -> .dmg (ad-hoc signature)
   linux/make_appimage.sh    AppImage (AppRun, .desktop)
-  icons/make_icons.py       draws PNG/ICO/ICNS at build time (no binary in git)
+  icons/meshfix-studio.svg  the logo; make_icons.py makes the PNG/ICO/ICNS,
+                            the installer pictures and the social preview
+                            from it (the files are in git)
 tests/
   test_core.py              the core, no window
   test_app.py               the window, off-screen

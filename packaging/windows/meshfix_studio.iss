@@ -31,6 +31,9 @@ LicenseFile=..\..\LICENSE
 OutputDir=..\..\dist
 OutputBaseFilename=MeshFix-Studio-{#AppVersion}-windows-x64-setup
 SetupIconFile=..\icons\meshfix-studio.ico
+; The pictures of the wizard (packaging/icons/make_icons.py): 100 % and 200 %.
+WizardImageFile=..\icons\wizard-large-100.bmp,..\icons\wizard-large-200.bmp
+WizardSmallImageFile=..\icons\wizard-small-100.bmp,..\icons\wizard-small-200.bmp
 UninstallDisplayIcon={app}\{#AppExe}
 Compression=lzma2/max
 SolidCompression=yes

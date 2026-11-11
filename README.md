@@ -1,3 +1,5 @@
+<p align="center"><img src="packaging/icons/png/meshfix-studio-128.png" width="96" height="96" alt="MeshFix Studio logo"></p>
+
 # MeshFix Studio
 
 MeshFix Studio repairs triangle meshes: STL, OBJ and PLY files from CAD,
@@ -62,7 +64,6 @@ The tests:
 
 The program, and its test:
 
-    .venv/bin/python packaging/icons/make_icons.py
     .venv/bin/pyinstaller --noconfirm packaging/pyinstaller/meshfix_studio.spec
     .venv/bin/python tests/test_built_app.py "dist/MeshFix Studio/MeshFix Studio"
 

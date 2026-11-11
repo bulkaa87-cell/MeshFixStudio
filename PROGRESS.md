@@ -15,6 +15,8 @@ keep it as a changelog.
    `tests/test_built_app.py` on the PyInstaller build (483 MB folder).
 4. The packaging: PyInstaller spec, Inno Setup script, macOS dmg script,
    AppImage script, icons drawn at build time, the CI workflow.
+   2026-11-11: the logo (packaging/icons/meshfix-studio.svg) replaces the
+   drawn icon; the icon files are in git (see "Logo" below).
 5. PLAN.md (the design), README.md, CONTRIBUTING.md.
 
 6. Release v0.1.0 (2026-11-11):
@@ -43,6 +45,25 @@ keep it as a changelog.
     .venv\Scripts\maturin develop --release -m crates\foamview\Cargo.toml
     .venv\Scripts\python tests\test_core.py
     .venv\Scripts\python tests\test_app.py
-    .venv\Scripts\python packaging\icons\make_icons.py
     .venv\Scripts\pyinstaller --noconfirm --distpath build\dist --workpath build\work packaging\pyinstaller\meshfix_studio.spec
     .venv\Scripts\python tests\test_built_app.py "build\dist\MeshFix Studio\MeshFix Studio.exe"
+
+## Logo (branch wip/t33-logos, 2026-11-11)
+
+Done:
+- The logo `packaging/icons/meshfix-studio.svg`: a triangle in 4 parts on
+  a dark tile, the middle part green (the patch of a repair).
+- `packaging/icons/make_icons.py` makes all files from the SVG: .ico
+  (16-256, each size drawn at its size), .icns, PNG 16-1024, the window
+  icons in `app/meshfix_studio/icons/`, the installer pictures and
+  `social-preview.png` (1280 x 640, for the GitHub settings; not set).
+  The files are in git; CI does not make them.
+- The window icon (also in «About»), the exe icon, the installer icon and
+  wizard pictures, the .app icon, the AppImage icons (hicolor 16-512 and
+  scalable), the README header.
+
+Next: merge to main after a check of the CI artifacts (installer, dmg,
+AppImage). No new release.
+
+How to test: `tests/test_app.py` checks the window icon. Build the exe
+(see below) and look at the icon in Explorer and on the taskbar.

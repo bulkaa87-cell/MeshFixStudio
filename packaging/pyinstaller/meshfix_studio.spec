@@ -19,7 +19,9 @@ datas = []
 for pkg in ("meshfix", "foamview"):
     datas += collect_data_files(pkg, includes=["i18n/**/*.json"])
 datas += [(os.path.join(APP, "meshfix_studio", "i18n"),
-           os.path.join("meshfix_studio", "i18n"))]
+           os.path.join("meshfix_studio", "i18n")),
+          (os.path.join(APP, "meshfix_studio", "icons"),
+           os.path.join("meshfix_studio", "icons"))]
 
 hidden = ["meshfix._native", "foamview._native", "pyvistaqt",
           "vtkmodules.util.numpy_support",
@@ -57,11 +59,13 @@ a = Analysis(
 )
 pyz = PYZ(a.pure)
 
+# The icon files are in git (packaging/icons/make_icons.py makes them).
+# Linux: no icon in the program; the AppImage has the PNG files.
 icon = None
-for name in ("meshfix-studio.ico", "meshfix-studio.icns"):
-    path = os.path.join(ROOT, "packaging", "icons", name)
-    if os.path.isfile(path) and (name.endswith(".ico") == (sys.platform == "win32")):
-        icon = path
+if sys.platform in ("win32", "darwin"):
+    icon = os.path.join(ROOT, "packaging", "icons",
+                        "meshfix-studio.ico" if sys.platform == "win32"
+                        else "meshfix-studio.icns")
 
 exe = EXE(
     pyz,

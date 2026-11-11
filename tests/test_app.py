@@ -120,6 +120,9 @@ def part_window():
     check("English by default (computer language uk)",
           i18n.language() == "en", i18n.language())
     check("title", win.windowTitle() == "MeshFix Studio", win.windowTitle())
+    sizes = sorted(s.width() for s in win.windowIcon().availableSizes())
+    check("window icon: the logo, 16 .. 256 px",
+          sizes[:1] == [16] and sizes[-1:] == [256], sizes)
     texts = {b.text() for b in win.findChildren(QtWidgets.QPushButton)}
     want = {"Open…", "Repair", "Export…", "Undo", "Reset"}
     check("buttons Open, Repair, Export, Undo, Reset", want <= texts,
