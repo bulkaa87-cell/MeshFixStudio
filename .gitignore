@@ -1,0 +1,30 @@
+# Build output
+/target/
+/dist/
+/build/
+/wheels/
+*.pyd
+*.so
+*.dylib
+*.dll
+*.exe
+*.dmg
+*.AppImage
+*.deb
+*.whl
+*.egg-info/
+__pycache__/
+*.pyc
+
+# Local tools
+/.venv/
+/.venv-*/
+.vscode/
+.idea/
+.claude/
+
+# Test output
+/tests/out/
+missing-*.txt
+compose-*.txt
+*.pdb

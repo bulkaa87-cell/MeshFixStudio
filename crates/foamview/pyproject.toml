@@ -1,0 +1,34 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "foamview"
+dynamic = ["version"]
+description = "3D view for triangle meshes (wgpu on a GPU or a software adapter, VTK and CPU fallbacks) for Qt programs"
+readme = "../../README.md"
+license = { text = "GPL-3.0-only" }
+requires-python = ">=3.10"
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+]
+dependencies = [
+    "meshfix-core",
+    "numpy>=1.26",
+    "PySide6>=6.7",
+    "pyvista>=0.44",
+    "pyvistaqt>=0.11",
+    "vtk>=9.3",
+]
+
+[project.optional-dependencies]
+# Colour maps of scalar fields (results of OpenFOAM Studio).
+scalars = ["matplotlib>=3.8"]
+# Screenshots to a file.
+images = ["pillow>=10"]
+
+[tool.maturin]
+python-source = "python"
+module-name = "foamview._native"

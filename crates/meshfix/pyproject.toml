@@ -1,0 +1,38 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "meshfix-core"
+dynamic = ["version"]
+description = "Repair and check of triangle surface meshes (STL, OBJ, PLY): the core of MeshFix Studio"
+readme = "../../README.md"
+license = { text = "GPL-3.0-only" }
+requires-python = ">=3.10"
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Rust",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "numpy>=1.26",
+    "pyvista>=0.44",
+    "vtk>=9.3",
+]
+
+[project.optional-dependencies]
+# The Windows repair service (meshfix.winfix). Windows only.
+windows = [
+    "winrt-Windows.Graphics.Printing3D>=3.2; sys_platform == 'win32'",
+    "winrt-Windows.Storage.Streams>=3.2; sys_platform == 'win32'",
+]
+qt = ["PySide6>=6.7"]
+
+[project.urls]
+Source = "https://github.com/bulkaa87-cell/MeshFixStudio"
+
+[tool.maturin]
+python-source = "python"
+module-name = "meshfix._native"
+features = ["python"]

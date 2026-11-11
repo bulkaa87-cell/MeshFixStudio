@@ -1,0 +1,12 @@
+[workspace]
+members = ["crates/meshfix", "crates/foamview"]
+resolver = "2"
+
+[workspace.package]
+license = "GPL-3.0-only"
+repository = "https://github.com/bulkaa87-cell/MeshFixStudio"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
