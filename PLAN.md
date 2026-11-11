@@ -273,7 +273,8 @@ The installers:
 - Triggers: a push to `main`, a pull request, a tag `v*`, a manual start.
 - Job `rust`: `cargo test -p meshfix --no-default-features` (Ubuntu).
 - Job `build`, a matrix: `windows-latest` (x64), `ubuntu-22.04` (x86_64),
-  `macos-14` (arm64), `macos-15-intel` (x86_64). Each: the two wheels with
+  `macos-15` (arm64), `macos-15-intel` (x86_64). GitHub no longer runs
+  `macos-14` (measured 2026-11-11). Each: the two wheels with
   maturin, the tests of the core and of the window off-screen, the
   icons, PyInstaller, the test of the BUILT program, the installer. The
   installer and the wheels are workflow artifacts (14 days).
@@ -284,7 +285,7 @@ The installers:
 - Job `release` (tags only): a DRAFT GitHub Release with the installers
   and the wheels. A person publishes it.
 - `macos-15-intel` is the Intel runner label of GitHub in 2026. If GitHub
-  removes it, remove the row or use `macos-13` while it exists.
+  removes it, remove the row: Intel Macs then use an older release.
 
 ## 11. The Windows-only method
 
