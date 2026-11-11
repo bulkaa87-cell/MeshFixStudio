@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MeshFix Studio
+Comment=Repair triangle meshes (STL, OBJ, PLY)
+Exec=meshfix-studio %f
+Icon=meshfix-studio
+Terminal=false
+Categories=Graphics;3DGraphics;Engineering;
+MimeType=model/stl;application/sla;model/obj;application/x-ply;

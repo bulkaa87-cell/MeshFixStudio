@@ -28,3 +28,8 @@ __pycache__/
 missing-*.txt
 compose-*.txt
 *.pdb
+
+# Icons: made at build time (packaging/icons/make_icons.py)
+/packaging/icons/*.png
+/packaging/icons/*.ico
+/packaging/icons/*.icns

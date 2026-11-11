@@ -2,8 +2,7 @@
 //!
 //! It does the steps of the Windows 3D-print repair (Printing3DModel.
 //! RepairAsync in Windows.Graphics.Printing.3D.dll) in the same order and
-//! with the same tolerances. docs/meshfix.md describes the steps and gives
-//! the measured comparison with Windows.
+//! with the same tolerances. The comments of stages.rs describe the steps.
 //!
 //! The module `check` is the geometry check (open edges, non-manifold edges,
 //! parts, volumes). It came from the `foamrs` crate of OpenFOAM Studio.

@@ -37,8 +37,7 @@ METHODS = (
      "stitch gaps up to 0.01 mm, remove duplicates, make normals consistent, "
      "close all holes, merge bodies that cut into each other, remove nested "
      "and tiny shells. The surface stays in place. If the mesh still did not "
-     "close, it uses alpha wrap by itself, and then the volume rebuild. "
-     "Description — devlog/meshfix.md"),
+     "close, it uses alpha wrap by itself, and then the volume rebuild."),
     ("alphawrap", "alpha wrap",
      "Wrap the whole assembly in one shell (alpha wrap in Rust, in the "
      "program itself) and shrink it onto the surface. The shell is closed, "

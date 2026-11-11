@@ -1,0 +1,195 @@
+# Build, test and package MeshFix Studio on Windows, macOS and Linux.
+#
+# Each push and pull request: the Rust tests, the native wheels, the tests
+# of the core and of the window (off-screen, software rendering), the
+# PyInstaller program, the test of the built program, and the installers
+# as workflow artifacts (kept 14 days).
+# A tag v* (for example v0.1.0): the same, then a GitHub Release with the
+# installers and the wheels. OpenFOAM Studio pins the wheels of a release.
+
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.12"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    name: Rust tests (meshfix crate)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --release -p meshfix --no-default-features
+
+  build:
+    name: ${{ matrix.name }}
+    needs: rust
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64
+            os: windows-latest
+            target: windows
+            arch: x64
+          - name: Linux x86_64
+            os: ubuntu-22.04
+            target: linux
+            arch: x86_64
+          - name: macOS arm64
+            os: macos-14
+            target: macos
+            arch: arm64
+          - name: macOS x86_64
+            os: macos-15-intel
+            target: macos
+            arch: x86_64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      QT_QPA_PLATFORM: offscreen
+      # Software rendering on the runners: WARP (Windows), lavapipe and
+      # llvmpipe (Linux). The view falls back to VTK and to the CPU renderer.
+      LIBGL_ALWAYS_SOFTWARE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux packages (Qt, Mesa llvmpipe and lavapipe, Xvfb)
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libgl1 libgl1-mesa-dri mesa-vulkan-drivers libvulkan1 \
+            libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
+            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libfontconfig1 \
+            libdbus-1-3 libxrender1 libxi6 libsm6 xvfb fonts-dejavu-core
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Python tools
+        run: python -m pip install --upgrade pip maturin pyinstaller pillow
+
+      - name: Native wheels (meshfix-core, foamview)
+        run: |
+          python -m maturin build --release -m crates/meshfix/Cargo.toml -o wheels
+          python -m maturin build --release -m crates/foamview/Cargo.toml -o wheels
+
+      - name: Install the wheels and the dependencies
+        run: |
+          python -m pip install wheels/*.whl
+          python -m pip install six
+          if [ "${{ matrix.target }}" = "windows" ]; then
+            python -m pip install "winrt-Windows.Graphics.Printing3D>=3.2" "winrt-Windows.Storage.Streams>=3.2"
+          fi
+
+      - name: Test the core
+        run: python -X utf8 tests/test_core.py
+
+      - name: Test the window (off-screen)
+        run: python -X utf8 tests/test_app.py
+
+      - name: Icons
+        run: python packaging/icons/make_icons.py
+
+      - name: PyInstaller program
+        run: python -m PyInstaller --noconfirm --distpath dist --workpath build/pyi packaging/pyinstaller/meshfix_studio.spec
+
+      - name: Test the built program (Windows)
+        if: matrix.target == 'windows'
+        env:
+          QT_QPA_PLATFORM: ""
+        run: python -X utf8 tests/test_built_app.py "dist/MeshFix Studio/MeshFix Studio.exe"
+
+      - name: Test the built program (Linux, Xvfb)
+        if: matrix.target == 'linux'
+        env:
+          QT_QPA_PLATFORM: xcb
+        run: xvfb-run -a python -X utf8 tests/test_built_app.py "dist/MeshFix Studio/MeshFix Studio"
+
+      - name: Test the built program (macOS)
+        if: matrix.target == 'macos'
+        run: python -X utf8 tests/test_built_app.py "dist/MeshFix Studio.app/Contents/MacOS/MeshFix Studio"
+
+      - name: Version
+        id: version
+        run: |
+          v=$(python -c "import re,io;print(re.search(r'^version\s*=\s*\"([^\"]+)\"', io.open('crates/meshfix/Cargo.toml',encoding='utf-8').read(), re.M).group(1))")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then v="${GITHUB_REF_NAME#v}"; fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Windows installer (Inno Setup)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup --no-progress -y; }
+          & $iscc "/DAppVersion=${{ steps.version.outputs.version }}" packaging\windows\meshfix_studio.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: macOS disk image
+        if: matrix.target == 'macos'
+        run: sh packaging/macos/make_dmg.sh "${{ steps.version.outputs.version }}" "${{ matrix.arch }}"
+
+      - name: Linux AppImage
+        if: matrix.target == 'linux'
+        run: sh packaging/linux/make_appimage.sh "${{ steps.version.outputs.version }}"
+
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.target }}-${{ matrix.arch }}
+          path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload the wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.target }}-${{ matrix.arch }}
+          path: wheels/*.whl
+          retention-days: 14
+
+  release:
+    name: GitHub Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            artifacts/installer-*/*
+            artifacts/wheels-*/*.whl

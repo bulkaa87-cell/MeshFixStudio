@@ -1,7 +1,7 @@
 """meshfix repair: the steps of the Windows repair, in Rust.
 
 SHARED CODE: this module was fs_meshfix.py of OpenFOAM Studio. MeshFix
-Studio and OpenFOAM Studio both use it (see docs/PLAN.md).
+Studio and OpenFOAM Studio both use it (see PLAN.md).
 
 WHAT IT IS. The method «Windows» of the «Repair» menu (meshfix.winfix)
 calls the Windows service
@@ -9,8 +9,8 @@ calls the Windows service
 (crates/meshfix, module meshfix._native) does the same 12 steps in the same order
 and with the same tolerances: stitch, close holes of 3 edges, remove
 doubles, orient the normals, close all holes, "wrap", remove degenerate
-faces and tiny shells. docs/meshfix.md describes the steps and gives the
-comparison with Windows.
+faces and tiny shells. The comments of crates/meshfix/src/stages.rs
+describe the steps.
 
 DIFFERENCES FROM THE SERVICE (measured on tests/meshfix_cases.py):
 - it works without WinRT and outside Windows, with no 3MF exchange;
