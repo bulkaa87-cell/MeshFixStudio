@@ -173,8 +173,8 @@ VTK for:
 The size of the Windows prototype (PyInstaller folder, measured): 483 MB.
 VTK is 286 MB of it (`vtk.libs` 243 MB, `vtkmodules` 43 MB), PySide6 100 MB,
 numpy 26 MB, matplotlib 14 MB, Pillow 11 MB, foamview 7 MB, meshfix 2 MB.
-A zip of the folder is 159 MB. An Inno Setup installer (LZMA2) is about
-110 to 130 MB (estimate, not built here).
+A zip of the folder is 159 MB. The Inno Setup installer (LZMA2) that CI
+built is 106.6 MB.
 
 Without VTK, pyvista, matplotlib and Pillow, and with only the used Qt
 modules, the folder is about 150 MB and the installer about 50 to 60 MB
@@ -317,7 +317,10 @@ The method «Windows» (`winfix`, the Printing3D service through pywinrt):
     edges, 12 flipped faces). Result: 0/0/0/0, and the exported file has
     the same counts.
   - The forced levels VTK, CPU and software (WARP) also repair.
-- Not built here: the Inno Setup installer, macOS, Linux (CI builds them).
+- Not built here: the Inno Setup installer, macOS, Linux. CI builds them.
+  The first CI run (2026-11-11) built the Windows installer (106.6 MB) and
+  the macOS x86_64 disk image (213 MB with zlib, now LZMA: smaller), and
+  the tests of the built program passed on both.
 
 ## 13. Next steps
 
