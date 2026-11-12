@@ -1,4 +1,4 @@
-//! StlSafe: the last step of the repair. It makes the result keep its
+//! stl_safe_output: the last step of the repair. It makes the result keep its
 //! counts after a write to STL and a read.
 //!
 //! STL keeps float32 coordinates and no topology. A reader (VTK, OpenFOAM)

@@ -18,6 +18,8 @@ What is here:
 - counts(diagnosis), COUNTS: the four counts of the program check that a
   repair must make zero.
 - summary(key): the text "what the last repair did" (meshfix methods).
+- steps(key): each step of the last repair on its own line (meshfix
+  methods), with the step names of meshfix.repair.STEPS.
 
 The meshes are in metres, as in meshfix.repair and meshfix.winfix: the tolerances of
 the repair are in mm, and these modules change the units for the repair.
@@ -33,7 +35,7 @@ from .i18n import tr
 # reads the key, never the label.
 METHODS = (
     ("meshfix", "meshfix",
-     "Our own repair in Rust (rust/meshfix), without the Windows service: "
+     "Our own repair in Rust (crates/meshfix), without the Windows service: "
      "stitch gaps up to 0.01 mm, remove duplicates, make normals consistent, "
      "close all holes, merge bodies that cut into each other, remove nested "
      "and tiny shells. The surface stays in place. If the mesh still did not "
@@ -156,4 +158,12 @@ def summary(key: str) -> str:
     """What the last meshfix repair did ("" for other methods)."""
     if key in fs_meshfix.METHODS and fs_meshfix.last_report:
         return fs_meshfix.summary(fs_meshfix.last_report)
+    return ""
+
+
+def steps(key: str) -> str:
+    """Each step of the last repair with its count and time, one per line
+    (meshfix methods; empty for the other methods)."""
+    if key in fs_meshfix.METHODS and fs_meshfix.last_report:
+        return fs_meshfix.steps_text(fs_meshfix.last_report)
     return ""

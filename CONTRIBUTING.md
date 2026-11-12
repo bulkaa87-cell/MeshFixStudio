@@ -14,6 +14,13 @@ repository at a pinned version. Thus:
   calls `repair_meshes()`.
 - Do not break the API of `meshfix` and `foamview` without a new minor
   version. OpenFOAM Studio calls it.
+- The repair steps have ids (`Stage::name` in `crates/meshfix/src/lib.rs`,
+  `meshfix.repair.STEPS`). Use our own descriptive names. Do not rename an
+  id without an entry in `LEGACY_STEP_IDS` (Python) and `LEGACY_STAGE_IDS`
+  (Rust): a saved report or a script can have the old id.
+- File formats: `meshfix.check.READERS` and `WRITERS` (suffix -> function).
+  A new format is one entry there; the open dialog takes its file types from
+  READERS.
 
 ## The 3D view (foamview)
 

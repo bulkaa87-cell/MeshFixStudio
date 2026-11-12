@@ -1,6 +1,6 @@
 //! Rim tools from the stitch approach (wip/t9-stitch, seal.rs): the bridge
 //! of the two rims of an open wall end, and the weld of rim vertex copies.
-//! CloseAllHoles (stages.rs) uses both before it fills a hole.
+//! fill_holes (stages.rs) uses both before it fills a hole.
 use crate::math::*;
 use crate::mesh::*;
 use std::collections::HashMap;

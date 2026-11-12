@@ -20,6 +20,7 @@ The inline comments are in Ukrainian: they come from the source module.
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -163,7 +164,8 @@ def load_surface(path: str) -> pv.PolyData:
     така геометрія доходила до вʼюпорта, де падала на порахунку нормалей —
     уже у вікні, з трасуванням у консоль замість людського повідомлення.
     """
-    mesh = pv.read(path)
+    reader = READERS.get(os.path.splitext(str(path))[1].lower(), _read_vtk)
+    mesh = reader(path)
     if not isinstance(mesh, pv.PolyData):
         mesh = mesh.extract_surface(algorithm="dataset_surface")
     mesh = drop_stray_cells(mesh.triangulate())
@@ -852,6 +854,33 @@ def _shell_voxels(mesh, origin, dims, voxel) -> np.ndarray:
 def write_stl(mesh: pv.PolyData, path: str, binary: bool = True) -> None:
     """Пише STL для constant/triSurface. Геометрія вже має бути в метрах."""
     mesh.save(path, binary=binary)
+
+
+# FILE FORMATS. One table for reading and one for writing: the suffix of the
+# file (lower case, with the dot) -> the function. A reader takes the path
+# and gives a pyvista data set (load_surface makes the triangle surface of
+# it). A writer takes (mesh, path). A new format is one entry in each table
+# that it supports; the open dialog takes its file types from READERS.
+def _read_vtk(path):
+    return pv.read(str(path))
+
+
+def _write_stl_binary(mesh, path) -> None:
+    write_stl(mesh, str(path), binary=True)
+
+
+READERS = {suffix: _read_vtk
+           for suffix in (".stl", ".obj", ".ply", ".vtp", ".vtk")}
+WRITERS = {".stl": _write_stl_binary}
+
+
+def write_mesh(mesh: pv.PolyData, path) -> None:
+    """Write `mesh` with the writer of the suffix of `path` (WRITERS)."""
+    suffix = os.path.splitext(str(path))[1].lower()
+    if suffix not in WRITERS:
+        raise ValueError(tr("No writer for the file type {suffix}.",
+                            suffix=suffix or "?"))
+    WRITERS[suffix](mesh, path)
 
 
 

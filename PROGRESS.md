@@ -51,9 +51,33 @@ keep it as a changelog.
     attestation found, installed, repaired models with pinched edges and a
     copy of a large aircraft model: 0/0/0/0 after the STL export and a read.
 
+13. Branch wip/t48-shared (version 0.2.0, not tagged; the owner decides
+    about the release):
+    - The code of both programs compared: the Rust crates meshfix and
+      foamview are the same (only the docs, the module name `_native`,
+      check.rs and the Cargo metadata differ); the Python modules repair,
+      methods, winfix and the window are the same code (only the imports,
+      the docstrings and the build text). The OpenFOAM Studio test of the
+      fallback text was missing here: it is in tests/test_core.py now.
+    - The repair steps have our own names: ids stitch_seams,
+      fill_tiny_holes, remove_duplicates, fix_orientation,
+      fill_tiny_holes_again, stitch_seams_again, fix_orientation_again,
+      fill_holes, merge_bodies, fix_degenerate_faces, remove_tiny_shells,
+      split_t_junctions, alpha_wrap, volume_rebuild, stl_safe_output.
+      English and Ukrainian names in meshfix.repair.STEPS. The old ids
+      still work as input: LEGACY_STEP_IDS (Python), LEGACY_STAGE_IDS and
+      Stage::from_name (Rust).
+    - The tooltip of «What the repair did» lists the steps.
+    - The open and export dialogs: texts through tr().
+    - meshfix.check.READERS / WRITERS / write_mesh(): one table of the file
+      formats (more formats come later, in a separate task).
+    - Checked: 57 Rust tests, tests/test_core.py and tests/test_app.py
+      0 problems.
+
 ## Next
 
-1. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section 5).
+1. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section
+   5): in work (OpenFOAM Studio branch wip/t48-shared).
 2. Make the program smaller (PLAN.md, section 6).
 3. Test the macOS and Linux files on real computers (CI tests them only
    on the runners, without a real GPU).

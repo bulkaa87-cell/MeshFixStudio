@@ -3,20 +3,30 @@ its problems in 3D, repair it, and export a binary STL.
 
 The program does not need Python.
 
-## What is new in 0.1.2
+## What is new in 0.2.0
 
-- A repaired mesh keeps its counts after the export to STL. STL keeps
-  float32 coordinates, and a reader joins points at the same place. Thus
-  two copies of a pinched edge or vertex became one point again, and the
-  file showed non-manifold edges or degenerate faces that the mesh in the
-  program did not have. A last repair step (StlSafe) now moves such copies
-  apart by a few float32 steps (about 0.001 mm on a model of 3 m).
+- The repair steps have new names. Each step has an id (ASCII) and a name
+  in English and Ukrainian: stitch seams, fill tiny holes, remove
+  duplicates, fix orientation, fill holes, merge bodies, fix degenerate
+  faces, remove tiny shells, split T-junctions, STL-safe output. The
+  report of the native module (`stages`, `fallback`, `undone`) and
+  `stop_after` use the new ids. The old ids still work as input
+  (`meshfix.repair.LEGACY_STEP_IDS`, `Stage::from_name` in Rust).
+- The text «What the repair did» shows each step with its count and time
+  as a tooltip.
+- The open and export dialogs show their texts in Ukrainian too.
+- `meshfix.check.READERS` and `WRITERS`: one table of the file formats for
+  reading and writing. `write_mesh()` writes with the writer of the suffix.
+- OpenFOAM Studio uses the packages `meshfix-core` and `foamview` of this
+  version: one repair code for both programs.
+
+## What was new in 0.1.2
+
+- A repaired mesh keeps its counts after the export to STL (the last
+  repair step, now «STL-safe output»).
 - meshfix: the result is close to the Windows 3D-model repair; this is
   checked by measurements on test meshes.
-- The same repair code as in OpenFOAM Studio.
-- The native modules keep no folder of the build computer: the build
-  replaces the source and Cargo folders with neutral names
-  (`--remap-path-prefix`).
+- The native modules keep no folder of the build computer.
 
 ## Download
 

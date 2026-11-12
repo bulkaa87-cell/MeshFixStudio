@@ -15,6 +15,13 @@ and export a binary STL.
     stitches gaps, removes duplicates, makes the normals consistent, closes
     holes, merges bodies that cut into each other, and removes tiny shells.
     The surface stays in place.
+    The 12 steps, in this order: stitch seams, fill tiny holes, remove
+    duplicates, fix orientation, fill tiny holes (2), stitch seams (2),
+    fix orientation (2), fill holes, merge bodies, fix degenerate faces,
+    remove tiny shells, split T-junctions. When the mesh is still not
+    closed: alpha wrap, then volume rebuild. The last step, STL-safe
+    output, keeps the counts after the export to STL. The tooltip of
+    «What the repair did» shows each step with its count.
   - **alpha wrap**: one closed shell around the whole model, shrunk onto
     the surface.
   - **Windows**: the repair service of Windows (the same as «Fix model» in

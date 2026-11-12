@@ -7,6 +7,7 @@
    the STL round trip of each result (binary STL in mm and in m).
 4. The method list: the Windows method only on Windows.
 5. The languages: English keys, the Ukrainian catalogue of the core.
+6. The step ids (and the old ids of a saved report), the file formats.
 
     python tests/test_core.py
 """
@@ -193,6 +194,82 @@ def part_language():
           methods.label("volume"))
 
 
+def part_steps():
+    print("6. the step ids, the old ids, the file formats")
+    want = ("stitch_seams", "fill_tiny_holes", "remove_duplicates",
+            "fix_orientation", "fill_tiny_holes_again", "stitch_seams_again",
+            "fix_orientation_again", "fill_holes", "merge_bodies",
+            "fix_degenerate_faces", "remove_tiny_shells", "split_t_junctions",
+            "alpha_wrap", "volume_rebuild", "stl_safe_output")
+    check("the step ids", tuple(mf.STEPS) == want, list(mf.STEPS))
+    check("each old id maps to a step id",
+          all(v in mf.STEPS for v in mf.LEGACY_STEP_IDS.values())
+          and not set(mf.LEGACY_STEP_IDS) & set(mf.STEPS)
+          and len(set(mf.LEGACY_STEP_IDS.values())) == len(mf.STEPS))
+    check("step_id: old id", mf.step_id("Stitch1") == "stitch_seams"
+          and mf.step_id("Wrap") == "merge_bodies"
+          and mf.step_id("fill_holes") == "fill_holes")
+    if mf.available():
+        p, t = mc.cube()
+        _q, _f, rep = mf.repair_arrays(np.asarray(p, float), np.delete(t, 2, 0))
+        names = [n for n, _c, _s in rep["stages"]]
+        check("the native report uses the step ids",
+              names[:12] == list(want[:12]) and all(n in mf.STEPS for n in names),
+              names)
+        for stop in ("fill_holes", "CloseAllHoles"):
+            try:
+                _rs = mf._rs.repair(np.asarray(p, float), np.asarray(t, np.int64),
+                                    True, True, stop_after=stop)
+                ok = [n for n, _c, _s in _rs[2]["stages"]][-1] == "fill_holes"
+            except ValueError as exc:
+                ok = False
+                stop = f"{stop}: {exc}"
+            check(f"stop_after {stop}", ok)
+        mf.repair(poly(p, np.delete(t, 2, 0)))
+        text = methods.steps("meshfix")
+        check("steps text: one line for each step",
+              len(text.splitlines()) == len(mf.last_report["stages"])
+              and "Stitch seams" in text, text)
+    # The status line of a fallback that replaced the result, with the ids
+    # of now and with the old ids (a saved report).
+    for wrap, alpha in (("merge_bodies", "alpha_wrap"), ("Wrap", "AlphaWrap")):
+        rep = {"stages": [(wrap, 3, 0.1), (alpha, 500, 1.0)], "union": {},
+               "fallback": alpha, "after": {}}
+        check(f"fallback named in the status line ({alpha})",
+              "alpha wrap" in mf.summary(rep), mf.summary(rep))
+        rep = {"stages": [(wrap, 3, 0.1), (alpha, 500, 1.0)], "union": {},
+               "fallback": None, "after": {}}
+        check(f"unused fallback not in the status line ({alpha})",
+              "alpha" not in mf.summary(rep)
+              and "inner shells removed 3" in mf.summary(rep),
+              mf.summary(rep))
+    i18n.set_language("uk")
+    label = mf.step_label("Stitch1")
+    check("uk: a step name", label not in ("Stitch seams", "Stitch1"), label)
+    text = mf.steps_text({"stages": [("fill_holes", 2, 0.5)]})
+    check("uk: the steps text", "2" in text and "Fill holes" not in text, text)
+    i18n.set_language("en")
+    check("en: the step name", mf.step_label("fill_holes") == "Fill holes")
+    check("en: the steps text", "Fill holes" in mf.steps_text(
+        {"stages": [("fill_holes", 2, 0.5)]}))
+    # The file format tables: the readers and the writers.
+    check("readers", set(geo.READERS) >= {".stl", ".obj", ".ply"},
+          sorted(geo.READERS))
+    check("writers", set(geo.WRITERS) == {".stl"}, sorted(geo.WRITERS))
+    import tempfile
+    p, t = mc.cube()
+    path = os.path.join(tempfile.mkdtemp(prefix="meshfix_io_"), "cube.stl")
+    geo.write_mesh(poly(p, t), path)
+    back_mesh = geo.load_surface(path)
+    check("write_mesh + load_surface: the cube", back_mesh.n_cells == 12,
+          back_mesh.n_cells)
+    try:
+        geo.write_mesh(poly(p, t), path[:-4] + ".xyz")
+        check("no writer: an error", False)
+    except ValueError as exc:
+        check("no writer: an error", ".xyz" in str(exc), str(exc))
+
+
 def main():
     try:
         part_native()
@@ -200,6 +277,7 @@ def main():
         part_repair()
         part_methods()
         part_language()
+        part_steps()
     except Exception:                                     # noqa: BLE001
         import traceback
         traceback.print_exc()

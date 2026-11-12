@@ -1,6 +1,6 @@
 //! Union by a mesh arrangement and winding-number labels.
 //!
-//! This is the "winding" mode of the Wrap step (the default; the variable
+//! This is the "winding" mode of the merge_bodies step (the default; the variable
 //! MESHFIX_WRAP=union selects union.rs). It treats all faces as one soup,
 //! also faces of open parts. Before it, planar.rs removes the glued caps in
 //! axis planes.
@@ -34,7 +34,7 @@
 //!    angle order. Each manifold sheet gets its own vertex copies.
 //!
 //! Where the labels of one wedge differ, the result has an open edge. The
-//! steps after the union in stages::wrap_winding close these.
+//! steps after the union in stages::merge_bodies_winding close these.
 use crate::math::*;
 use crate::mesh::*;
 use crate::union::{candidate_pairs, dbg_time, jitter, test_pair_x, Fwn, Hit, PairResult};

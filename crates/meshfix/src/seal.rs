@@ -1,6 +1,6 @@
 //! Seal: a topological last step for assemblies that the 12 steps
 //! leave open (from the stitch approach, wip/t9-stitch). In this branch the
-//! winding Wrap calls it when its own post steps leave open or non-manifold
+//! winding merge_bodies calls it when its own post steps leave open or non-manifold
 //! edges.
 //!
 //! The program's check counts open edges, non-manifold edges, parts with a
@@ -554,7 +554,7 @@ pub fn orient_bfs(mesh: &mut Mesh) -> usize {
 /// Make the faces of each shell agree, then turn each shell with a negative
 /// signed volume. Returns the number of shells turned.
 fn orient(mesh: &mut Mesh) -> usize {
-    fix_flipped(mesh);
+    fix_orientation(mesh);
     let ef = mesh.edge_faces();
     let shells = components(mesh, &ef);
     let mut n = 0;

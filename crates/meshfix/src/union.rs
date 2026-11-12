@@ -1,4 +1,4 @@
-//! Union of closed shells that intersect (the Wrap step: two cubes that
+//! Union of closed shells that intersect (the merge_bodies step: two cubes that
 //! cut into each other become one body).
 //!
 //! Steps:

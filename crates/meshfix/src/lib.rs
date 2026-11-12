@@ -39,65 +39,129 @@ pub use mesh::Mesh;
 use math::*;
 use std::time::{Duration, Instant};
 
+/// One step of the repair. `name()` is the id of the step in the report
+/// (ASCII, snake_case). The ids of the older versions (before 0.2.0) are in
+/// `LEGACY_STAGE_IDS`: `from_name()` also takes them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Stage {
-    Stitch1,
-    CloseTrivialHoles1,
-    RemoveDoubleTriangles,
-    FixFlipped1,
-    CloseTrivialHoles2,
-    Stitch2,
-    FixFlipped2,
-    CloseAllHoles,
-    Wrap,
-    RemoveDegeneratedFaces,
+    /// Join the rims that are nearer than the stitch tolerance.
+    StitchSeams,
+    /// Fill each hole of 3 edges with one triangle.
+    FillTinyHoles,
+    /// Weld near points and remove each second copy of a triangle.
+    RemoveDuplicates,
+    /// Make the orientation the same in each shell.
+    FixOrientation,
+    FillTinyHolesAgain,
+    StitchSeamsAgain,
+    FixOrientationAgain,
+    /// Fill all holes that are left.
+    FillHoles,
+    /// Split the non-manifold edges, join the bodies that cut into each
+    /// other, remove the shells that are inside other shells.
+    MergeBodies,
+    /// Remove or repair the triangles with no area.
+    FixDegenerateFaces,
+    /// Remove each closed shell with a very small volume.
     RemoveTinyShells,
-    PrepareForExport,
+    /// Split the T-junctions that are left, weld exactly, remove collapsed
+    /// faces.
+    SplitTJunctions,
     /// Fallback 1 after the 12 steps (not one of them): alpha wrap of
     /// the input, shrunk onto the input (alphawrap.rs).
     AlphaWrap,
-    /// Fallback 2, the last one: volumetric remesh (volume.rs).
-    VolumeRemesh,
+    /// Fallback 2, the last one: volume rebuild (volume.rs).
+    VolumeRebuild,
     /// The last step, after the scale back (stlsafe.rs): the result keeps
     /// its counts after a write to STL (float32) and a read.
-    StlSafe,
+    StlSafeOutput,
 }
+
+/// All steps: the 12 steps, the two fallbacks, the last step.
+pub const ALL_STAGES: [Stage; 15] = [
+    Stage::StitchSeams,
+    Stage::FillTinyHoles,
+    Stage::RemoveDuplicates,
+    Stage::FixOrientation,
+    Stage::FillTinyHolesAgain,
+    Stage::StitchSeamsAgain,
+    Stage::FixOrientationAgain,
+    Stage::FillHoles,
+    Stage::MergeBodies,
+    Stage::FixDegenerateFaces,
+    Stage::RemoveTinyShells,
+    Stage::SplitTJunctions,
+    Stage::AlphaWrap,
+    Stage::VolumeRebuild,
+    Stage::StlSafeOutput,
+];
+
+/// The step ids of the versions before 0.2.0 -> the step. A saved report
+/// or a script with an old id still works.
+pub const LEGACY_STAGE_IDS: [(&str, Stage); 15] = [
+    ("Stitch1", Stage::StitchSeams),
+    ("CloseTrivialHoles1", Stage::FillTinyHoles),
+    ("RemoveDoubleTriangles", Stage::RemoveDuplicates),
+    ("FixFlipped1", Stage::FixOrientation),
+    ("CloseTrivialHoles2", Stage::FillTinyHolesAgain),
+    ("Stitch2", Stage::StitchSeamsAgain),
+    ("FixFlipped2", Stage::FixOrientationAgain),
+    ("CloseAllHoles", Stage::FillHoles),
+    ("Wrap", Stage::MergeBodies),
+    ("RemoveDegeneratedFaces", Stage::FixDegenerateFaces),
+    ("RemoveTinyShells", Stage::RemoveTinyShells),
+    ("PrepareForExport", Stage::SplitTJunctions),
+    ("AlphaWrap", Stage::AlphaWrap),
+    ("VolumeRemesh", Stage::VolumeRebuild),
+    ("StlSafe", Stage::StlSafeOutput),
+];
 
 /// The 12 steps, in the order that `repair` runs them.
 pub const PIPELINE: [Stage; 12] = [
-    Stage::Stitch1,
-    Stage::CloseTrivialHoles1,
-    Stage::RemoveDoubleTriangles,
-    Stage::FixFlipped1,
-    Stage::CloseTrivialHoles2,
-    Stage::Stitch2,
-    Stage::FixFlipped2,
-    Stage::CloseAllHoles,
-    Stage::Wrap,
-    Stage::RemoveDegeneratedFaces,
+    Stage::StitchSeams,
+    Stage::FillTinyHoles,
+    Stage::RemoveDuplicates,
+    Stage::FixOrientation,
+    Stage::FillTinyHolesAgain,
+    Stage::StitchSeamsAgain,
+    Stage::FixOrientationAgain,
+    Stage::FillHoles,
+    Stage::MergeBodies,
+    Stage::FixDegenerateFaces,
     Stage::RemoveTinyShells,
-    Stage::PrepareForExport,
+    Stage::SplitTJunctions,
 ];
 
 impl Stage {
+    /// The id of the step (ASCII, snake_case): the report and `stop_after`
+    /// use it.
     pub fn name(self) -> &'static str {
         match self {
-            Stage::Stitch1 => "Stitch1",
-            Stage::CloseTrivialHoles1 => "CloseTrivialHoles1",
-            Stage::RemoveDoubleTriangles => "RemoveDoubleTriangles",
-            Stage::FixFlipped1 => "FixFlipped1",
-            Stage::CloseTrivialHoles2 => "CloseTrivialHoles2",
-            Stage::Stitch2 => "Stitch2",
-            Stage::FixFlipped2 => "FixFlipped2",
-            Stage::CloseAllHoles => "CloseAllHoles",
-            Stage::Wrap => "Wrap",
-            Stage::RemoveDegeneratedFaces => "RemoveDegeneratedFaces",
-            Stage::RemoveTinyShells => "RemoveTinyShells",
-            Stage::PrepareForExport => "PrepareForExport",
-            Stage::AlphaWrap => "AlphaWrap",
-            Stage::VolumeRemesh => "VolumeRemesh",
-            Stage::StlSafe => "StlSafe",
+            Stage::StitchSeams => "stitch_seams",
+            Stage::FillTinyHoles => "fill_tiny_holes",
+            Stage::RemoveDuplicates => "remove_duplicates",
+            Stage::FixOrientation => "fix_orientation",
+            Stage::FillTinyHolesAgain => "fill_tiny_holes_again",
+            Stage::StitchSeamsAgain => "stitch_seams_again",
+            Stage::FixOrientationAgain => "fix_orientation_again",
+            Stage::FillHoles => "fill_holes",
+            Stage::MergeBodies => "merge_bodies",
+            Stage::FixDegenerateFaces => "fix_degenerate_faces",
+            Stage::RemoveTinyShells => "remove_tiny_shells",
+            Stage::SplitTJunctions => "split_t_junctions",
+            Stage::AlphaWrap => "alpha_wrap",
+            Stage::VolumeRebuild => "volume_rebuild",
+            Stage::StlSafeOutput => "stl_safe_output",
         }
+    }
+
+    /// The step of an id, also of an old id (`LEGACY_STAGE_IDS`).
+    pub fn from_name(name: &str) -> Option<Stage> {
+        ALL_STAGES
+            .iter()
+            .copied()
+            .find(|s| s.name() == name)
+            .or_else(|| LEGACY_STAGE_IDS.iter().find(|(old, _)| *old == name).map(|&(_, s)| s))
     }
 }
 
@@ -110,7 +174,7 @@ pub enum Method {
     /// Only the alpha wrap of the input (alphawrap.rs), no 12 steps. The
     /// result is used when it has faces, also when it is not clean.
     AlphaWrap,
-    /// The steps up to CloseAllHoles, then the volumetric remesh
+    /// The steps up to fill_holes, then the volumetric remesh
     /// (volume.rs). The result is used when it has faces and keeps more
     /// than 30 % of the volume.
     Volume,
@@ -145,7 +209,7 @@ pub struct RepairOptions {
     pub degenerate_tolerance: f64,
     pub tiny_shell_volume: f64,
     pub export_tolerance: f64,
-    pub enable_wrap: bool,
+    pub enable_merge_bodies: bool,
     /// Fallback 1: when the 12 steps do not give a clean mesh, make an
     /// alpha wrap of the input and shrink it onto the input (alphawrap.rs).
     pub alpha_wrap: bool,
@@ -165,7 +229,7 @@ pub struct RepairOptions {
     /// default of `VolumeOptions` (2048). A small value is for tests: the
     /// default grid on a compact model takes minutes.
     pub volume_cells: Option<usize>,
-    /// The last step StlSafe (stlsafe.rs). MESHFIX_STL_SAFE=off stops it.
+    /// The last step stl_safe_output (stlsafe.rs). MESHFIX_STL_SAFE=off stops it.
     pub stl_safe: bool,
 }
 
@@ -178,7 +242,7 @@ impl Default for RepairOptions {
             degenerate_tolerance: 0.002,
             tiny_shell_volume: 0.001,
             export_tolerance: 0.001,
-            enable_wrap: true,
+            enable_merge_bodies: true,
             alpha_wrap: true,
             alpha_wrap_force: false,
             wrap_alpha: None,
@@ -271,41 +335,41 @@ pub struct RepairReport {
     /// Normalized = original · scale (after the shift to the bbox minimum).
     pub scale: f64,
     pub stages: Vec<StageResult>,
-    /// What the union in the Wrap step did.
+    /// What the union in the merge_bodies step did.
     pub union: union::UnionReport,
     /// Steps undone by the guard (they gave more open or non-manifold edges).
     /// A fallback that ran but was not used is in this list too.
     pub undone: Vec<Stage>,
     /// The fallback whose result replaced the result of the 12 steps:
-    /// Stage::AlphaWrap or Stage::VolumeRemesh. None: no fallback used.
+    /// Stage::AlphaWrap or Stage::VolumeRebuild. None: no fallback used.
     pub fallback: Option<Stage>,
     /// The alpha wrap, when it ran.
     pub alpha_wrap: Option<alphawrap::WrapReport>,
     /// The volumetric remesh, when it ran.
     pub volume: Option<volume::VolumeReport>,
-    /// The StlSafe step, when it ran.
+    /// The stl_safe_output step, when it ran.
     pub stl_safe: Option<stlsafe::StlSafeReport>,
 }
 
 pub fn run_stage(stage: Stage, m: &mut Mesh, o: &RepairOptions) -> usize {
     match stage {
-        Stage::Stitch1 | Stage::Stitch2 => stages::stitch(m, o.stitch_tolerance),
-        Stage::CloseTrivialHoles1 | Stage::CloseTrivialHoles2 => stages::close_trivial_holes(m),
-        Stage::RemoveDoubleTriangles => stages::remove_double_triangles(m, o.weld_tolerance),
-        Stage::FixFlipped1 | Stage::FixFlipped2 => stages::fix_flipped(m),
-        Stage::CloseAllHoles => stages::close_all_holes(m),
-        Stage::Wrap => {
-            if o.enable_wrap {
-                stages::wrap(m)
+        Stage::StitchSeams | Stage::StitchSeamsAgain => stages::stitch_seams(m, o.stitch_tolerance),
+        Stage::FillTinyHoles | Stage::FillTinyHolesAgain => stages::fill_tiny_holes(m),
+        Stage::RemoveDuplicates => stages::remove_duplicates(m, o.weld_tolerance),
+        Stage::FixOrientation | Stage::FixOrientationAgain => stages::fix_orientation(m),
+        Stage::FillHoles => stages::fill_holes(m),
+        Stage::MergeBodies => {
+            if o.enable_merge_bodies {
+                stages::merge_bodies(m)
             } else {
                 0
             }
         }
-        Stage::RemoveDegeneratedFaces => stages::remove_degenerated_faces(m, o.degenerate_tolerance),
+        Stage::FixDegenerateFaces => stages::fix_degenerate_faces(m, o.degenerate_tolerance),
         Stage::RemoveTinyShells => stages::remove_tiny_shells(m, o.tiny_shell_volume),
-        Stage::PrepareForExport => stages::prepare_for_export(m, o.export_tolerance),
+        Stage::SplitTJunctions => stages::split_t_junctions(m, o.export_tolerance),
         // The fallbacks are not single steps: see `repair`.
-        Stage::AlphaWrap | Stage::VolumeRemesh | Stage::StlSafe => 0,
+        Stage::AlphaWrap | Stage::VolumeRebuild | Stage::StlSafeOutput => 0,
     }
 }
 
@@ -351,10 +415,10 @@ pub fn repair(
         Method::Pipeline => pipeline(mesh, opts, &mut progress),
         // The wrap reads only the input: the 12 steps are not necessary.
         Method::AlphaWrap => (Vec::new(), union::UnionReport::default(), Vec::new(), None),
-        // The remesh source is the mesh after CloseAllHoles, as for the
+        // The remesh source is the mesh after fill_holes, as for the
         // fallback. The steps after it (the union) are not necessary.
         Method::Volume => {
-            let o2 = RepairOptions { stop_after: Some(Stage::CloseAllHoles), volume_fallback: true, ..opts.clone() };
+            let o2 = RepairOptions { stop_after: Some(Stage::FillHoles), volume_fallback: true, ..opts.clone() };
             pipeline(mesh, &o2, &mut progress)
         }
     };
@@ -411,7 +475,7 @@ pub fn repair(
     if want_vol && !mesh.triangles.is_empty() {
         let t0 = Instant::now();
         // Source of the remesh: the mesh before the union (after
-        // CloseAllHoles). The raw input leaks: open thin parts fill with
+        // fill_holes). The raw input leaks: open thin parts fill with
         // "outside". MESHFIX_VOL_SRC=input|result for diagnosis.
         let src_mode = std::env::var("MESHFIX_VOL_SRC").unwrap_or_default();
         let src = match (src_mode.as_str(), &pre_wrap) {
@@ -441,26 +505,26 @@ pub fn repair(
             if ok && rep.volume_ratio > 0.3 {
                 *mesh = vm;
                 used = true;
-                fallback = Some(Stage::VolumeRemesh);
+                fallback = Some(Stage::VolumeRebuild);
             }
             vol_rep = Some(rep);
         }
         if !used {
-            undone.push(Stage::VolumeRemesh);
+            undone.push(Stage::VolumeRebuild);
         }
-        out.push(StageResult { stage: Stage::VolumeRemesh, count: faces, time: t0.elapsed() });
-        progress(Stage::VolumeRemesh, faces);
+        out.push(StageResult { stage: Stage::VolumeRebuild, count: faces, time: t0.elapsed() });
+        progress(Stage::VolumeRebuild, faces);
     }
     mesh.affine(1.0 / s, lo);
-    // StlSafe works on the final coordinates: the float32 grid of the file
+    // stl_safe_output works on the final coordinates: the float32 grid of the file
     // is in these units (or in a scale of them).
     let mut stl_rep = None;
     let stl_on = opts.stl_safe && opts.stop_after.is_none() && std::env::var("MESHFIX_STL_SAFE").as_deref() != Ok("off");
     if stl_on && !mesh.triangles.is_empty() {
         let t0 = Instant::now();
         let r = stlsafe::make_stl_safe(mesh, &stlsafe::GRIDS);
-        out.push(StageResult { stage: Stage::StlSafe, count: r.changes(), time: t0.elapsed() });
-        progress(Stage::StlSafe, r.changes());
+        out.push(StageResult { stage: Stage::StlSafeOutput, count: r.changes(), time: t0.elapsed() });
+        progress(Stage::StlSafeOutput, r.changes());
         stl_rep = Some(r);
     }
     let after = mesh_info(mesh);
@@ -479,7 +543,7 @@ pub fn repair(
 }
 
 /// The 12 steps with the guard. Returns (step results, union report,
-/// steps undone, the mesh after CloseAllHoles).
+/// steps undone, the mesh after fill_holes).
 fn pipeline(
     mesh: &mut Mesh,
     opts: &RepairOptions,
@@ -496,8 +560,8 @@ fn pipeline(
         // before is undone. The 12 steps reduce these numbers; a step
         // that does not is wrong for this mesh.
         let snapshot = mesh.clone();
-        let mut count = if stage == Stage::Wrap && o_wrap(opts) {
-            let (n, r) = stages::wrap_report(mesh);
+        let mut count = if stage == Stage::MergeBodies && o_wrap(opts) {
+            let (n, r) = stages::merge_bodies_report(mesh);
             union_rep = r;
             n
         } else {
@@ -512,7 +576,7 @@ fn pipeline(
             defects = now;
         }
         out.push(StageResult { stage, count, time: t0.elapsed() });
-        if stage == Stage::CloseAllHoles && opts.volume_fallback {
+        if stage == Stage::FillHoles && opts.volume_fallback {
             pre_wrap = Some(mesh.clone());
         }
         progress(stage, count);
@@ -641,5 +705,5 @@ pub fn wrap_params(src: &Mesh, o: &RepairOptions, s: f64) -> alphawrap::WrapOpti
 }
 
 fn o_wrap(o: &RepairOptions) -> bool {
-    o.enable_wrap
+    o.enable_merge_bodies
 }

@@ -71,7 +71,7 @@ fn assert_good_cube(m: &Mesh, r: &RepairReport, vol: f64) {
 fn stitch_merges_soup() {
     let mut m = soup(&cube(10.0, [0.0; 3]));
     assert_eq!(m.vertices.len(), 36);
-    stitch(&mut m, 0.01);
+    stitch_seams(&mut m, 0.01);
     assert_eq!(m.vertices.len(), 8);
     assert!(mesh_info(&m).is_closed());
 }
@@ -79,10 +79,10 @@ fn stitch_merges_soup() {
 #[test]
 fn stitch_obeys_tolerance() {
     let mut m = seam(0.009, 10.0);
-    stitch(&mut m, 0.01);
+    stitch_seams(&mut m, 0.01);
     assert_eq!(m.vertices.len(), 8);
     let mut m = seam(0.011, 10.0);
-    stitch(&mut m, 0.01);
+    stitch_seams(&mut m, 0.01);
     assert_eq!(m.vertices.len(), 10);
 }
 
@@ -94,7 +94,7 @@ fn stitch_splits_t_junction() {
     m.triangles[2] = [4, 8, 6];
     m.triangles.push([8, 5, 6]);
     assert_eq!(mesh_info(&m).boundary_edges, 3);
-    let n = stitch(&mut m, 0.01);
+    let n = stitch_seams(&mut m, 0.01);
     assert!(n >= 1);
     assert!(mesh_info(&m).is_closed());
 }
@@ -103,7 +103,7 @@ fn stitch_splits_t_junction() {
 fn trivial_hole_gets_one_triangle() {
     let mut m = cube(10.0, [0.0; 3]);
     m.triangles.remove(2);
-    assert_eq!(close_trivial_holes(&mut m), 1);
+    assert_eq!(fill_tiny_holes(&mut m), 1);
     let i = mesh_info(&m);
     assert!(i.is_closed() && i.is_oriented());
     assert!((volume(&m) - 1000.0).abs() < 1e-9);
@@ -115,7 +115,7 @@ fn double_triangles_go() {
     let t0 = m.triangles[0];
     m.triangles.push(t0);
     m.triangles.push([t0[0], t0[2], t0[1]]);
-    assert_eq!(remove_double_triangles(&mut m, 1e-4), 2);
+    assert_eq!(remove_duplicates(&mut m, 1e-4), 2);
     assert_eq!(m.triangles.len(), 12);
     assert!(mesh_info(&m).is_closed());
 }
@@ -125,7 +125,7 @@ fn flipped_face_turns_back() {
     let mut m = cube(10.0, [0.0; 3]);
     m.triangles[6].swap(1, 2);
     assert_eq!(mesh_info(&m).flipped_edges, 3);
-    assert_eq!(fix_flipped(&mut m), 1);
+    assert_eq!(fix_orientation(&mut m), 1);
     assert!(mesh_info(&m).is_oriented());
     assert!((volume(&m) - 1000.0).abs() < 1e-9);
 }
@@ -135,7 +135,7 @@ fn all_holes_close_flat_and_curved() {
     // Square hole of 4 edges.
     let mut m = cube(10.0, [0.0; 3]);
     m.triangles.drain(2..4);
-    assert_eq!(close_all_holes(&mut m), 1);
+    assert_eq!(fill_holes(&mut m), 1);
     assert!(mesh_info(&m).is_closed() && mesh_info(&m).is_oriented());
     assert!((volume(&m) - 1000.0).abs() < 1e-9);
     // Open cylinder with 2 holes of 24 edges.
@@ -154,7 +154,7 @@ fn all_holes_close_flat_and_curved() {
         t.push([i, n as u32 + j, n as u32 + i]);
     }
     let mut c = Mesh::new(v, t);
-    assert_eq!(close_all_holes(&mut c), 2);
+    assert_eq!(fill_holes(&mut c), 2);
     assert!(mesh_info(&c).is_closed() && mesh_info(&c).is_oriented());
     let ngon = 0.5 * n as f64 * 25.0 * (std::f64::consts::TAU / n as f64).sin();
     assert!((volume(&c) - ngon * 10.0).abs() < 1e-6);
@@ -166,7 +166,7 @@ fn concave_flat_hole_has_no_overlap() {
     // the area of the L (3), with no triangle outside the L.
     let v = vec![[0., 0., 0.], [2., 0., 0.], [2., 1., 0.], [1., 1., 0.], [1., 2., 0.], [0., 2., 0.]];
     let mut cap = Mesh::new(v, vec![[0, 1, 2], [0, 2, 3], [0, 3, 4], [0, 4, 5]]);
-    assert_eq!(close_all_holes(&mut cap), 1);
+    assert_eq!(fill_holes(&mut cap), 1);
     let area: f64 = cap.triangles[4..]
         .iter()
         .map(|t| tri_area(cap.vertices[t[0] as usize], cap.vertices[t[1] as usize], cap.vertices[t[2] as usize]))
@@ -184,7 +184,7 @@ fn wrap_turns_inverted_and_drops_nested() {
         t.swap(1, 2);
     }
     let mut m = join(&m, &cube(4.0, [3.0, 3.0, 3.0]));
-    assert_eq!(wrap(&mut m), 1);
+    assert_eq!(merge_bodies(&mut m), 1);
     assert_eq!(m.triangles.len(), 12);
     assert!((volume(&m) - 1000.0).abs() < 1e-9);
 }
@@ -206,7 +206,7 @@ fn winding_union_of_glued_and_crossing_cubes() {
     let c = cube(6.0, [7.0, 2.0, 7.0]);
     let mut m = join(&join(&a, &b), &c);
     let before = volume(&m);
-    let (_, rep) = wrap_winding(&mut m);
+    let (_, rep) = merge_bodies_winding(&mut m);
     assert!(!rep.panicked, "{rep:?}");
     let i = mesh_info(&m);
     assert!(i.is_closed() && i.is_oriented(), "{i:?} {rep:?}");
@@ -222,7 +222,7 @@ fn winding_open_part_inside_closed_part() {
     let mut inner = cube(4.0, [3.0, 3.0, 3.0]);
     inner.triangles.retain(|t| *t != [4, 5, 6] && *t != [4, 6, 7]);
     let mut m = join(&cube(10.0, [0.0; 3]), &inner);
-    wrap_winding(&mut m);
+    merge_bodies_winding(&mut m);
     let i = mesh_info(&m);
     assert!(i.is_closed() && i.is_oriented(), "{i:?}");
     assert!((volume(&m) - 1000.0).abs() < 1e-6);
@@ -236,7 +236,7 @@ fn degenerate_face_goes() {
     m.triangles.push([8, 5, 6]);
     m.triangles.push([8, 4, 5]);
     assert!(mesh_info(&m).is_closed());
-    assert!(remove_degenerated_faces(&mut m, 0.002) >= 1);
+    assert!(fix_degenerate_faces(&mut m, 0.002) >= 1);
     let i = mesh_info(&m);
     assert!(i.is_closed() && i.is_oriented(), "{i:?}");
     for f in 0..m.triangles.len() {
@@ -312,7 +312,7 @@ fn full_repair_seams_follow_scale() {
 #[test]
 fn flat_plate_becomes_nothing() {
     // Windows gives an empty model for a flat plate: the fill makes a closed
-    // shell with no volume, and RemoveTinyShells removes it.
+    // shell with no volume, and remove_tiny_shells removes it.
     let mut m = Mesh::new(vec![[0., 0., 0.], [10., 0., 0.], [10., 10., 0.], [0., 10., 0.]], vec![[0, 1, 2], [0, 2, 3]]);
     fix(&mut m);
     assert!(m.triangles.is_empty());
@@ -438,7 +438,7 @@ fn shared_edge_is_split() {
     assert!(r.after.is_closed() && r.after.is_oriented(), "{:?}", r.after);
     assert_eq!(r.after.non_manifold_edges, 0);
     assert_eq!(r.after.shells, 2);
-    // StlSafe moves the two copies of the edge apart by some float32 steps.
+    // stl_safe_output moves the two copies of the edge apart by some float32 steps.
     assert!((volume(&m) - 2000.0).abs() < 1e-3, "volume {}", volume(&m));
 }
 
@@ -563,7 +563,7 @@ fn touching_copies_stay_clean() {
     let r = fix(&mut m);
     assert_eq!(m.defect_edges(), 0, "{:?}", r.after);
     assert_eq!(r.after.shells, 2);
-    // StlSafe moves the two copies of the edge apart by some float32 steps.
+    // stl_safe_output moves the two copies of the edge apart by some float32 steps.
     assert!((volume(&m) - 2000.0).abs() < 1e-3, "volume {}", volume(&m));
 }
 
@@ -773,12 +773,33 @@ fn method_names() {
     assert_eq!(Method::from_name("x"), None);
 }
 
+#[test]
+fn stage_ids_and_old_ids() {
+    // Each step has its own ASCII id, and from_name gives the step back.
+    let ids: std::collections::HashSet<&str> = ALL_STAGES.iter().map(|s| s.name()).collect();
+    assert_eq!(ids.len(), ALL_STAGES.len());
+    for s in ALL_STAGES {
+        assert!(s.name().bytes().all(|b| b.is_ascii_lowercase() || b == b'_'), "{}", s.name());
+        assert_eq!(Stage::from_name(s.name()), Some(s));
+    }
+    // The ids of the versions before 0.2.0 still work, and no old id is a
+    // new id.
+    for (old, s) in LEGACY_STAGE_IDS {
+        assert_eq!(Stage::from_name(old), Some(s), "{old}");
+        assert!(!ids.contains(old), "{old}");
+    }
+    assert_eq!(Stage::from_name("Stitch1"), Some(Stage::StitchSeams));
+    assert_eq!(Stage::from_name("no_such_step"), None);
+    assert_eq!(PIPELINE[0].name(), "stitch_seams");
+    assert_eq!(PIPELINE[11].name(), "split_t_junctions");
+}
+
 fn forced_method_on_a_clean_cube(method: Method) {
     {
         let mut m = cube(10.0, [0.0; 3]);
         let o = RepairOptions { method, volume_cells: Some(96), ..Default::default() };
         let r = repair(&mut m, &o, |_, _| {}).unwrap();
-        let want = if method == Method::AlphaWrap { Stage::AlphaWrap } else { Stage::VolumeRemesh };
+        let want = if method == Method::AlphaWrap { Stage::AlphaWrap } else { Stage::VolumeRebuild };
         assert_eq!(r.fallback, Some(want), "{method:?}");
         assert!(is_clean(&m), "{method:?}");
         // The QEM decimation of the remesh gives the 12 cube faces again.
@@ -786,12 +807,12 @@ fn forced_method_on_a_clean_cube(method: Method) {
         let v = volume(&m);
         assert!((v - 1000.0).abs() < 60.0, "{method:?} volume {v}");
         // The forced wrap does not run the 12 steps; the forced remesh
-        // runs the steps up to CloseAllHoles.
-        let steps: Vec<Stage> = r.stages.iter().map(|s| s.stage).filter(|&s| s != Stage::StlSafe).collect();
+        // runs the steps up to fill_holes.
+        let steps: Vec<Stage> = r.stages.iter().map(|s| s.stage).filter(|&s| s != Stage::StlSafeOutput).collect();
         if method == Method::AlphaWrap {
             assert_eq!(steps, vec![Stage::AlphaWrap]);
         } else {
-            assert!(steps.contains(&Stage::CloseAllHoles) && !steps.contains(&Stage::Wrap), "{steps:?}");
+            assert!(steps.contains(&Stage::FillHoles) && !steps.contains(&Stage::MergeBodies), "{steps:?}");
         }
     }
 }
@@ -896,7 +917,7 @@ fn volume_remesh_drops_sheets() {
 
 // ---- From the stitch approach (seal.rs, rims.rs)
 /// Seal step: the flap gets its own edge, its fill makes a shell of no
-/// volume, and RemoveTinyShells removes that shell. The cube stays closed.
+/// volume, and remove_tiny_shells removes that shell. The cube stays closed.
 #[test]
 fn fin_is_sealed() {
     let mut m = cube(10.0, [0.0; 3]);
@@ -1060,7 +1081,7 @@ fn contact_overlay_fine_caps_with_noise() {
     // Two grid boxes glued on caps with other grids, b turned by 0.3 deg in
     // the plane, its bottom vertices moved by up to 3e-5 off the plane, and
     // all turned out of the axis planes. After the overlay and the winding
-    // Wrap the result is one closed body with the volume of both.
+    // merge_bodies the result is one closed body with the volume of both.
     let a = grid_box([0.0; 3], [10.0; 3], 7, false);
     let mut b = grid_box([2.0, 3.0, 10.0], [8.0, 12.0, 15.0], 5, true);
     let (s, c) = (0.3f64.to_radians().sin(), 0.3f64.to_radians().cos());
@@ -1089,7 +1110,7 @@ fn contact_overlay_fine_caps_with_noise() {
         }
     }
     assert_eq!(o.defect_edges(), 0, "{:?} {r:?}", mesh_info(&o));
-    let (_, rep) = wrap_winding(&mut m);
+    let (_, rep) = merge_bodies_winding(&mut m);
     assert!(!rep.panicked);
     let i = mesh_info(&m);
     assert!(i.is_closed() && i.is_oriented(), "{i:?}");
@@ -1141,7 +1162,7 @@ fn seams_are_cut_out_and_filled() {
     assert!((volume(&m) - 1000.0).abs() < 1e-6, "volume {}", volume(&m));
 }
 
-// ---- StlSafe (the last step) -------------------------------------------
+// ---- stl_safe_output (the last step) -------------------------------------------
 
 /// (clean, degenerate faces) of the mesh after a float32 STL round trip
 /// at the scale factor k.

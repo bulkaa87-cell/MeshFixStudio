@@ -7,7 +7,7 @@ use crate::mesh::*;
 use std::cmp::{Ordering, Reverse};
 use std::collections::{BinaryHeap, HashMap, HashSet, VecDeque};
 
-// ---- Stitch ------------------------------------------------------------
+// ---- stitch_seams -------------------------------------------------------
 
 #[derive(Clone, Copy)]
 struct Cand {
@@ -102,22 +102,22 @@ pub fn merge_boundary_vertices(mesh: &mut Mesh, tol: f64) -> usize {
     merges
 }
 
-/// Stitch = exact weld, boundary-vertex merge, T-junction split, exact weld.
+/// stitch_seams = exact weld, boundary-vertex merge, T-junction split, exact weld.
 /// The exact welds use rim vertices only: a weld of inner vertices joins
 /// bodies that touch at a vertex into one non-manifold vertex (measured on
 /// a clean, closed aircraft model: 57 new non-manifold edges).
-pub fn stitch(mesh: &mut Mesh, tol: f64) -> usize {
+pub fn stitch_seams(mesh: &mut Mesh, tol: f64) -> usize {
     mesh.weld_rim(0.0)
         + merge_boundary_vertices(mesh, tol)
         + mesh.split_boundary_tjunctions(tol)
         + mesh.weld_rim(0.0)
 }
 
-// ---- CloseTrivialHoles -------------------------------------------------
+// ---- fill_tiny_holes ----------------------------------------------------
 
 /// Close each hole of 3 edges with one triangle. A hole of 2 edges cannot
 /// occur in an indexed mesh with one edge per vertex pair.
-pub fn close_trivial_holes(mesh: &mut Mesh) -> usize {
+pub fn fill_tiny_holes(mesh: &mut Mesh) -> usize {
     let mut n = 0;
     for l in mesh.boundary_loops() {
         if l.len() == 3 {
@@ -128,11 +128,11 @@ pub fn close_trivial_holes(mesh: &mut Mesh) -> usize {
     n
 }
 
-// ---- RemoveDoubleTriangles ---------------------------------------------
+// ---- remove_duplicates --------------------------------------------------
 
 /// Weld with `weld_tol`, then remove each triangle that uses the same three
 /// vertices as another triangle (either orientation).
-pub fn remove_double_triangles(mesh: &mut Mesh, weld_tol: f64) -> usize {
+pub fn remove_duplicates(mesh: &mut Mesh, weld_tol: f64) -> usize {
     mesh.weld_rim(weld_tol);
     let mut seen = HashSet::with_capacity(mesh.triangles.len());
     let mut keep = vec![true; mesh.triangles.len()];
@@ -153,12 +153,12 @@ pub fn remove_double_triangles(mesh: &mut Mesh, weld_tol: f64) -> usize {
     removed
 }
 
-// ---- FixFlippedTriangles -----------------------------------------------
+// ---- fix_orientation ----------------------------------------------------
 
 /// Make the orientation the same in each shell. Faces are put in two
 /// classes through the manifold edges. The class with the smaller area
 /// turns over. A shell that cannot be oriented (Moebius) stays as it is.
-pub fn fix_flipped(mesh: &mut Mesh) -> usize {
+pub fn fix_orientation(mesh: &mut Mesh) -> usize {
     let ef = mesh.edge_faces();
     let nf = mesh.triangles.len();
     let mut class = vec![0u8; nf];
@@ -210,7 +210,7 @@ pub fn fix_flipped(mesh: &mut Mesh) -> usize {
     flipped
 }
 
-// ---- CloseAllHoles -----------------------------------------------------
+// ---- fill_holes ---------------------------------------------------------
 
 /// Holes up to this size get the minimum-area triangulation (good for a
 /// curved hole). Larger holes get a CDT in the plane of the hole.
@@ -388,7 +388,7 @@ fn triangulate_dp(v: &[Vec3], poly: &[u32], banned: &dyn Fn(usize, usize, usize)
 /// across the opening. Then the vertex copies at one position on a rim are
 /// welded (a slit closes, a pinched rim becomes simple rims). Then each
 /// simple rim gets a fill.
-pub fn close_all_holes(mesh: &mut Mesh) -> usize {
+pub fn fill_holes(mesh: &mut Mesh) -> usize {
     let bridged = crate::rims::bridge_rims(mesh);
     let (loops, _welded) = crate::rims::weld_rim_copies(mesh);
     let mut ef = mesh.edge_faces();
@@ -422,11 +422,11 @@ pub fn close_all_holes(mesh: &mut Mesh) -> usize {
     bridged + loops.len()
 }
 
-/// CloseAllHoles for the winding Wrap: as `close_all_holes`, but a fill
+/// fill_holes for the winding merge_bodies: as `fill_holes`, but a fill
 /// that crosses another face is made again with the next method (minimum
 /// area, then CDT, then a fan from the centroid). Returns the number of
 /// holes closed.
-pub fn close_all_holes_checked(mesh: &mut Mesh) -> usize {
+pub fn fill_holes_checked(mesh: &mut Mesh) -> usize {
     let bridged = crate::rims::bridge_rims(mesh);
     let (loops, _welded) = crate::rims::weld_rim_copies(mesh);
     if loops.is_empty() {
@@ -491,7 +491,7 @@ pub fn close_all_holes_checked(mesh: &mut Mesh) -> usize {
     bridged + loops.len()
 }
 
-// ---- Wrap --------------------------------------------------------------
+// ---- merge_bodies -------------------------------------------------------
 //
 // Split non-manifold edges and vertices, turn each
 // closed shell so that the normals point out, make the union of the shells
@@ -513,18 +513,18 @@ fn shell_bbox(mesh: &Mesh, shell: &[u32]) -> (Vec3, Vec3) {
 }
 
 /// Returns the number of inner shells removed.
-pub fn wrap(mesh: &mut Mesh) -> usize {
-    wrap_report(mesh).0
+pub fn merge_bodies(mesh: &mut Mesh) -> usize {
+    merge_bodies_report(mesh).0
 }
 
-/// The Wrap mode: "winding" (arrange.rs, default) or "union" (union.rs).
+/// The merge_bodies mode: "winding" (arrange.rs, default) or "union" (union.rs).
 /// The variable MESHFIX_WRAP selects it.
-pub fn wrap_mode_winding() -> bool {
+pub fn merge_mode_winding() -> bool {
     !matches!(std::env::var("MESHFIX_WRAP").as_deref(), Ok("union"))
 }
 
-/// Wrap by the arrangement and winding-number labels (arrange.rs).
-pub fn wrap_winding(mesh: &mut Mesh) -> (usize, crate::arrange::ArrangeReport) {
+/// merge_bodies by the arrangement and winding-number labels (arrange.rs).
+pub fn merge_bodies_winding(mesh: &mut Mesh) -> (usize, crate::arrange::ArrangeReport) {
     let t = std::time::Instant::now();
     let before_split = mesh.clone();
     let defects = mesh.defect_edges();
@@ -658,7 +658,7 @@ pub fn excise_and_fill(mesh: &mut Mesh, rings: usize, seed: &[Vec3]) {
     mesh.retain_faces(&keep);
     split_nonmanifold(mesh);
     remove_flaps(mesh);
-    close_all_holes_checked(mesh);
+    fill_holes_checked(mesh);
     split_nonmanifold(mesh);
 }
 
@@ -692,7 +692,7 @@ pub fn remove_flaps(mesh: &mut Mesh) -> usize {
 pub fn winding_post(mesh: &mut Mesh) {
     let t0 = std::time::Instant::now();
     // A closed shell with a negative volume is a void inside the body. The
-    // Wrap fills such voids.
+    // merge_bodies fills such voids.
     let voids = remove_voids(mesh);
     if std::env::var_os("MESHFIX_TIMING").is_some() {
         eprintln!("winding voids removed {voids}");
@@ -716,12 +716,12 @@ pub fn winding_post(mesh: &mut Mesh) {
                     // The stitch moves rim vertices by up to 0.01 units, and
                     // then faces cross. The fill below welds the rim copies.
                     if std::env::var_os("MESHFIX_POST_STITCH").is_some() {
-                        stitch(mesh, 0.01);
+                        stitch_seams(mesh, 0.01);
                     }
                 }
                 2 => {
                     remove_flaps(mesh);
-                    close_all_holes_checked(mesh);
+                    fill_holes_checked(mesh);
                 }
                 _ => {
                     split_nonmanifold(mesh);
@@ -807,10 +807,10 @@ pub fn remove_voids(mesh: &mut Mesh) -> usize {
     n
 }
 
-/// Wrap with the union report: (count for the step, union report).
-pub fn wrap_report(mesh: &mut Mesh) -> (usize, crate::union::UnionReport) {
-    if wrap_mode_winding() {
-        let (n, r) = wrap_winding(mesh);
+/// merge_bodies with the union report: (count for the step, union report).
+pub fn merge_bodies_report(mesh: &mut Mesh) -> (usize, crate::union::UnionReport) {
+    if merge_mode_winding() {
+        let (n, r) = merge_bodies_winding(mesh);
         let u = crate::union::UnionReport {
             pairs: r.pairs,
             degenerate: r.degenerate,
@@ -873,10 +873,10 @@ pub fn wrap_report(mesh: &mut Mesh) -> (usize, crate::union::UnionReport) {
         let d0 = mesh.defect_edges();
         match k {
             0 => {
-                stitch(mesh, 0.01);
+                stitch_seams(mesh, 0.01);
             }
             1 => {
-                close_all_holes(mesh);
+                fill_holes(mesh);
             }
             _ => {
                 split_nonmanifold(mesh);
@@ -966,7 +966,7 @@ fn remove_nested_with(mesh: &mut Mesh, mostly: bool) -> usize {
     n
 }
 
-// ---- RemoveDegeneratedFaces --------------------------------------------
+// ---- fix_degenerate_faces -----------------------------------------------
 
 /// Height of a triangle over its longest edge.
 fn height(a: Vec3, b: Vec3, c: Vec3) -> f64 {
@@ -1036,7 +1036,7 @@ impl VertexFaces {
 /// Collapse each edge shorter than `tol` (needle). Then, for each face with
 /// a height below `tol` (cap), flip its longest edge, or remove the face
 /// when the edge is on the boundary. Returns the number of changes.
-pub fn remove_degenerated_faces(mesh: &mut Mesh, tol: f64) -> usize {
+pub fn fix_degenerate_faces(mesh: &mut Mesh, tol: f64) -> usize {
     let mut total = 0;
     // Vertices whose collapse made a face cross: not tried again.
     let mut refused: Vec<bool> = Vec::new();
@@ -1386,7 +1386,7 @@ pub(crate) fn undo_crossing_ops(
     (nc, nf)
 }
 
-// ---- RemoveTinyShells --------------------------------------------------
+// ---- remove_tiny_shells -------------------------------------------------
 
 /// Remove each closed shell with |volume| below `min_volume`.
 pub fn remove_tiny_shells(mesh: &mut Mesh, min_volume: f64) -> usize {
@@ -1408,13 +1408,13 @@ pub fn remove_tiny_shells(mesh: &mut Mesh, min_volume: f64) -> usize {
     removed
 }
 
-// ---- PrepareForExport --------------------------------------------------
+// ---- split_t_junctions --------------------------------------------------
 
 /// Split the T-junctions that are left, weld exactly, remove collapsed faces.
-pub fn prepare_for_export(mesh: &mut Mesh, tol: f64) -> usize {
+pub fn split_t_junctions(mesh: &mut Mesh, tol: f64) -> usize {
     let n = mesh.split_boundary_tjunctions(tol);
     // Exact weld of the boundary vertices only. A weld of inner vertices
-    // would join again the copies that Wrap made at shared edges and
+    // would join again the copies that merge_bodies made at shared edges and
     // vertices (two bodies that touch).
     let mut rim = vec![false; mesh.vertices.len()];
     for (&(a, b), fs) in &mesh.edge_faces() {
@@ -1426,13 +1426,13 @@ pub fn prepare_for_export(mesh: &mut Mesh, tol: f64) -> usize {
     mesh.weld_exact_where(Some(&rim));
     mesh.drop_collapsed();
     let mut n = n + split_nonmanifold(mesh);
-    if wrap_mode_winding() {
+    if merge_mode_winding() {
         n += split_pinched_edges(mesh);
     }
     // Winding mode: the thorough cleanup of the library approach (each edge,
     // to the midpoint or to an end), then the last cleanup below.
-    n += remove_zero_area_with(mesh, wrap_mode_winding());
-    if wrap_mode_winding() {
+    n += remove_zero_area_with(mesh, merge_mode_winding());
+    if merge_mode_winding() {
         n += remove_zero_area_final(mesh) + remove_micro_clusters(mesh) + remove_inverted_parts(mesh, 1e-3);
     }
     n
@@ -1998,7 +1998,7 @@ pub fn remove_zero_area_with(mesh: &mut Mesh, thorough: bool) -> usize {
     total
 }
 
-// ---- Non-manifold split ------------------------------------------------
+// ---- Non-manifold split -------------------------------------------------
 
 /// Pairs of faces on an edge with more than two faces. Each body is on the
 /// back side of its faces, so a face that runs a to b pairs with the face
@@ -2099,7 +2099,7 @@ pub fn split_pinched_edges(mesh: &mut Mesh) -> usize {
 }
 
 /// Parts below this |volume| (normalized units cubed) are removed by
-/// remove_inverted_parts: the limit of RemoveTinyShells.
+/// remove_inverted_parts: the limit of remove_tiny_shells.
 pub const TINY_PART_VOLUME: f64 = 0.001;
 
 #[inline]

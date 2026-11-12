@@ -236,6 +236,25 @@ def part_small(win):
                                 win.findChildren(QtWidgets.QLabel)))
     check("uk: a view toggle", win.view.chk["body"].text() != "Model",
           win.view.chk["body"].text())
+    # The file dialogs are static calls: their texts go through tr().
+    seen = []
+    real_open = QtWidgets.QFileDialog.getOpenFileName
+    real_save = QtWidgets.QFileDialog.getSaveFileName
+    QtWidgets.QFileDialog.getOpenFileName = staticmethod(
+        lambda *a, **k: (seen.extend([str(a[1]), str(a[3])]), ("", ""))[1])
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(
+        lambda *a, **k: (seen.extend([str(a[1]), str(a[3])]), ("", ""))[1])
+    try:
+        win.open_dialog()
+        win.export_dialog()
+    finally:
+        QtWidgets.QFileDialog.getOpenFileName = real_open
+        QtWidgets.QFileDialog.getSaveFileName = real_save
+    check("uk: the file dialog texts", len(seen) == 4
+          and "Open a mesh" not in seen and "Export binary STL" not in seen
+          and "STL binary (*.stl)" not in seen, seen)
+    check("the steps of the repair in the tooltip",
+          win.lbl_summary.toolTip().count("\n") >= 10, win.lbl_summary.toolTip())
     win.set_language("en")
     pump(200)
     texts = {b.text() for b in win.findChildren(QtWidgets.QPushButton)}

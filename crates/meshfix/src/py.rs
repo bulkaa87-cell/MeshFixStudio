@@ -48,10 +48,8 @@ fn repair<'py>(
     let stop = match stop_after {
         None => None,
         Some(name) => Some(
-            crate::PIPELINE
-                .iter()
-                .copied()
-                .find(|s| s.name() == name)
+            crate::Stage::from_name(name)
+                .filter(|s| crate::PIPELINE.contains(s))
                 .ok_or_else(|| PyValueError::new_err(format!("stop_after: no step {name}")))?,
         ),
     };
@@ -74,7 +72,7 @@ fn repair<'py>(
     let verts: Vec<[f64; 3]> = p.rows().into_iter().map(|r| [r[0], r[1], r[2]]).collect();
     let opts = RepairOptions {
         normalize_scale: normalize,
-        enable_wrap: wrap,
+        enable_merge_bodies: wrap,
         stop_after: stop,
         alpha_wrap,
         wrap_alpha: alpha,
@@ -141,7 +139,7 @@ fn repair<'py>(
     }
     if let Some(v) = &report.volume {
         let vd = PyDict::new(py);
-        vd.set_item("used", report.fallback == Some(crate::Stage::VolumeRemesh))?;
+        vd.set_item("used", report.fallback == Some(crate::Stage::VolumeRebuild))?;
         vd.set_item("h", v.h / report.scale)?;
         vd.set_item("dims", v.dims.to_vec())?;
         vd.set_item("surface_cells", v.surface_cells)?;
@@ -199,7 +197,7 @@ fn mesh_from<'py>(points: &numpy::PyReadonlyArray2<'py, f64>, tris: &numpy::PyRe
     ))
 }
 
-/// Only the last step StlSafe on a mesh (for checks and diagnosis).
+/// Only the last step stl_safe_output on a mesh (for checks and diagnosis).
 /// Returns (points, tris, report dict as report["stl_safe"]).
 #[pyfunction]
 fn stl_safe<'py>(

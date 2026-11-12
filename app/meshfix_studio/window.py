@@ -60,7 +60,8 @@ DEFAULT_LANGUAGE = "en"
 I18N_DIR = Path(__file__).resolve().with_name("i18n")
 ICON_DIR = Path(__file__).resolve().with_name("icons")
 APP_USER_MODEL_ID = "MeshFixStudio.MeshFixStudio"
-SUFFIXES = (".stl", ".obj", ".ply", ".vtp", ".vtk")
+# The file types that the window opens: the reader table of meshfix.check.
+SUFFIXES = tuple(geo.READERS)
 SOURCE_URL = "https://github.com/bulkaa87-cell/MeshFixStudio"
 HISTORY = 10            # undo steps that the program keeps
 CLOSE_GRACE_MS = 1500   # wait for a running repair at the end, then exit
@@ -522,7 +523,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             return
         start = self.store.value("folder", str(Path.home()))
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, "Open a mesh", start,
+            self, tr("Open a mesh"), start,
             tr("Meshes ({patterns});;All files (*)",
                patterns=" ".join("*" + s for s in SUFFIXES)))
         if path:
@@ -631,6 +632,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._push(before)
         self.state = state
         self.repaired = {"key": key, "seconds": sec, "summary": summary,
+                         "steps": fs_repair.steps(key),
                          "before": before.diag}
         self._show(reset_camera=False)
         d0, d1 = before.diag, state.diag
@@ -680,8 +682,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         if self.repaired is not None or self.state is not self.loaded:
             stem += "_repaired"
         path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, "Export binary STL", str(Path(folder) / f"{stem}.stl"),
-            "STL binary (*.stl)")
+            self, tr("Export binary STL"), str(Path(folder) / f"{stem}.stl"),
+            tr("STL binary (*.stl)"))
         if path:
             self.export_file(path)
 
@@ -695,7 +697,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             path = path.with_suffix(".stl")
         try:
             out = geo.apply_scale(self.state.mesh, 1.0 / self.factor)
-            geo.write_stl(out, str(path), binary=True)
+            geo.write_mesh(out, path)
         except Exception as exc:                          # noqa: BLE001
             QtWidgets.QMessageBox.critical(self, tr("Export failed"), str(exc))
             return None
@@ -801,6 +803,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             for lab in info.values():
                 lab.setText("—")
             self.lbl_summary.setText("—")
+            self.lbl_summary.setToolTip("")
             return
         d = st.diag
         rep = self.repaired
@@ -838,6 +841,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             info["method"].setText(fs_repair.label(rep["key"]))
             info["time"].setText(tr("{sec} s", sec=_seconds(rep["seconds"])))
             self.lbl_summary.setText(rep["summary"] or "—")
+            self.lbl_summary.setToolTip(rep.get("steps") or "")
         else:
             info["method"].setText("—")
             info["time"].setText("—")
