@@ -6,9 +6,9 @@ paths in the native modules.
 
 rustc writes the paths of the source files into the binary (panic
 messages, debug data). --remap-path-prefix replaces the folder of this
-repository with "src" and the Cargo home with "cargo". Thus a built
-.pyd or .so does not show a user name or a local folder. CI uses this
-script too.
+repository with "src", the Cargo home with "cargo" and a CARGO_TARGET_DIR
+with "target". Thus a built .pyd or .so does not show a user name or a
+local folder. CI uses this script too.
 """
 
 from __future__ import annotations
@@ -31,6 +31,11 @@ def cargo_home() -> Path:
 def rustflags() -> str:
     flags = [f"--remap-path-prefix={ROOT}=src",
              f"--remap-path-prefix={cargo_home()}=cargo"]
+    # A target folder outside the repository (CARGO_TARGET_DIR): the
+    # generated sources of the build scripts are there.
+    target = os.environ.get("CARGO_TARGET_DIR")
+    if target:
+        flags.insert(0, f"--remap-path-prefix={Path(target).resolve()}=target")
     old = os.environ.get("RUSTFLAGS", "").strip()
     return " ".join(([old] if old else []) + flags)
 

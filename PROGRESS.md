@@ -73,6 +73,13 @@ keep it as a changelog.
       formats (more formats come later, in a separate task).
     - Checked: 57 Rust tests, tests/test_core.py and tests/test_app.py
       0 problems.
+    - tools/build_wheels.py also remaps CARGO_TARGET_DIR ("target"): a
+      target folder outside the repository put its path into
+      foamview._native (generated sources of a build script). CI builds
+      inside the repository, thus the released files did not have it.
+    - OpenFOAM Studio (its branch wip/t48-shared) runs with these wheels:
+      its repair tests, the full delta test, gpucheck (11 PASS, also
+      lavapipe and llvmpipe) and the frozen program are green.
 
 ## Next
 
