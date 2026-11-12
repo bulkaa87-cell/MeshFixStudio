@@ -48,8 +48,7 @@ keep it as a changelog.
 
 ## Next
 
-1. Port the T31 change of OpenFOAM Studio (STL-safe output) into
-   `crates/meshfix` (PLAN.md, section 8).
+1. Release v0.1.2 from wip/stlsafe (the owner decides).
 2. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section 5).
 3. Make the program smaller (PLAN.md, section 6).
 4. Test the macOS and Linux files on real computers (CI tests them only
