@@ -46,12 +46,16 @@ keep it as a changelog.
     tests/test_app.py 0 problems; copies of two large aircraft models
     stay 0/0/0/0 after the export to STL and a read.
 
+12. Release v0.1.2 (2026-11-12, Latest): wip/stlsafe merged into main.
+    The Windows installer of the release: SHA256 = SHA256SUMS.txt,
+    attestation found, installed, repaired models with pinched edges and a
+    copy of a large aircraft model: 0/0/0/0 after the STL export and a read.
+
 ## Next
 
-1. Release v0.1.2 from wip/stlsafe (the owner decides).
-2. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section 5).
-3. Make the program smaller (PLAN.md, section 6).
-4. Test the macOS and Linux files on real computers (CI tests them only
+1. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section 5).
+2. Make the program smaller (PLAN.md, section 6).
+3. Test the macOS and Linux files on real computers (CI tests them only
    on the runners, without a real GPU).
 
 ## How to test (Windows)
