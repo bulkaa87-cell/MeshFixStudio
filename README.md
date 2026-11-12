@@ -10,7 +10,8 @@ and export a binary STL.
   non-manifold edges (yellow), degenerate triangles (green). «Next Problem»
   moves the camera to the next problem.
 - Repair methods:
-  - **meshfix**: the steps of the Windows 3D-print repair, in Rust. It
+  - **meshfix**: a repair in Rust. The result is close to the Windows
+    3D-model repair; this is checked by measurements on test meshes. It
     stitches gaps, removes duplicates, makes the normals consistent, closes
     holes, merges bodies that cut into each other, and removes tiny shells.
     The surface stays in place.

@@ -154,7 +154,7 @@ Other OFS changes:
 - `tools/build_rust.ps1`: no build of `meshfix` and `foamview`.
 - The GitHub export of OFS: fewer files (no `rust/meshfix`, `rust/foamview`).
 - Two texts changed here, with their Ukrainian translations: the tooltip
-  of the meshfix method (no reference to `devlog/meshfix.md`) and the
+  of the meshfix method (no reference to private notes) and the
   `why_not()` text (`meshfix.repair._OFS_TEXT = True` gives the old OFS
   text with `tools\build_rust.ps1`).
 

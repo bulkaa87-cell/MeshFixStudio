@@ -1,8 +1,10 @@
 //! meshfix: repair of triangle surface meshes.
 //!
-//! It does the steps of the Windows 3D-print repair (Printing3DModel.
-//! RepairAsync in Windows.Graphics.Printing.3D.dll) in the same order and
-//! with the same tolerances. The comments of stages.rs describe the steps.
+//! It repairs a mesh in 12 steps: stitch, close small holes, remove
+//! doubles, orient the normals, close all holes, wrap, remove degenerate
+//! faces and tiny shells. The result is close to the Windows 3D-model
+//! repair; this is checked by measurements on test meshes. The comments of
+//! stages.rs describe the steps.
 //!
 //! The module `check` is the geometry check (open edges, non-manifold edges,
 //! parts, volumes). It came from the `foamrs` crate of OpenFOAM Studio.
@@ -24,6 +26,7 @@ mod py;
 pub mod rims;
 pub mod seal;
 pub mod stages;
+pub mod stlsafe;
 // Diagnosis on a mesh file: RUSTFLAGS="--cfg meshfix_debug" (file not in git).
 #[cfg(all(test, meshfix_debug))]
 mod debug_tests;
@@ -50,14 +53,17 @@ pub enum Stage {
     RemoveDegeneratedFaces,
     RemoveTinyShells,
     PrepareForExport,
-    /// Fallback 1 after the 12 steps (not a Windows step): alpha wrap of
+    /// Fallback 1 after the 12 steps (not one of them): alpha wrap of
     /// the input, shrunk onto the input (alphawrap.rs).
     AlphaWrap,
     /// Fallback 2, the last one: volumetric remesh (volume.rs).
     VolumeRemesh,
+    /// The last step, after the scale back (stlsafe.rs): the result keeps
+    /// its counts after a write to STL (float32) and a read.
+    StlSafe,
 }
 
-/// The step order of the Windows repair ("repair_extended").
+/// The order of the 12 steps.
 pub const PIPELINE: [Stage; 12] = [
     Stage::Stitch1,
     Stage::CloseTrivialHoles1,
@@ -90,6 +96,7 @@ impl Stage {
             Stage::PrepareForExport => "PrepareForExport",
             Stage::AlphaWrap => "AlphaWrap",
             Stage::VolumeRemesh => "VolumeRemesh",
+            Stage::StlSafe => "StlSafe",
         }
     }
 }
@@ -158,6 +165,8 @@ pub struct RepairOptions {
     /// default of `VolumeOptions` (2048). A small value is for tests: the
     /// default grid on a compact model takes minutes.
     pub volume_cells: Option<usize>,
+    /// The last step StlSafe (stlsafe.rs). MESHFIX_STL_SAFE=off stops it.
+    pub stl_safe: bool,
 }
 
 impl Default for RepairOptions {
@@ -178,6 +187,7 @@ impl Default for RepairOptions {
             stop_after: None,
             method: Method::Pipeline,
             volume_cells: None,
+            stl_safe: true,
         }
     }
 }
@@ -273,6 +283,8 @@ pub struct RepairReport {
     pub alpha_wrap: Option<alphawrap::WrapReport>,
     /// The volumetric remesh, when it ran.
     pub volume: Option<volume::VolumeReport>,
+    /// The StlSafe step, when it ran.
+    pub stl_safe: Option<stlsafe::StlSafeReport>,
 }
 
 pub fn run_stage(stage: Stage, m: &mut Mesh, o: &RepairOptions) -> usize {
@@ -293,13 +305,12 @@ pub fn run_stage(stage: Stage, m: &mut Mesh, o: &RepairOptions) -> usize {
         Stage::RemoveTinyShells => stages::remove_tiny_shells(m, o.tiny_shell_volume),
         Stage::PrepareForExport => stages::prepare_for_export(m, o.export_tolerance),
         // The fallbacks are not single steps: see `repair`.
-        Stage::AlphaWrap | Stage::VolumeRemesh => 0,
+        Stage::AlphaWrap | Stage::VolumeRemesh | Stage::StlSafe => 0,
     }
 }
 
-/// Scale factor that puts the largest extent in [5, 400], as Windows does.
-/// Measured: cubes of 0.5..5 mm and of 400..5000 mm show the same
-/// relative result, cubes of 5..400 mm show the same absolute result.
+/// Scale factor that puts the largest extent in [5, 400]: the step
+/// tolerances are for this range.
 pub fn normal_scale(ext: f64) -> f64 {
     if ext > 1e-6 && ext < 5.0 {
         5.0 / ext
@@ -440,8 +451,19 @@ pub fn repair(
         out.push(StageResult { stage: Stage::VolumeRemesh, count: faces, time: t0.elapsed() });
         progress(Stage::VolumeRemesh, faces);
     }
-    let after = mesh_info(mesh);
     mesh.affine(1.0 / s, lo);
+    // StlSafe works on the final coordinates: the float32 grid of the file
+    // is in these units (or in a scale of them).
+    let mut stl_rep = None;
+    let stl_on = opts.stl_safe && opts.stop_after.is_none() && std::env::var("MESHFIX_STL_SAFE").as_deref() != Ok("off");
+    if stl_on && !mesh.triangles.is_empty() {
+        let t0 = Instant::now();
+        let r = stlsafe::make_stl_safe(mesh, &stlsafe::GRIDS);
+        out.push(StageResult { stage: Stage::StlSafe, count: r.changes(), time: t0.elapsed() });
+        progress(Stage::StlSafe, r.changes());
+        stl_rep = Some(r);
+    }
+    let after = mesh_info(mesh);
     Ok(RepairReport {
         before,
         after,
@@ -452,6 +474,7 @@ pub fn repair(
         fallback,
         alpha_wrap: wrap_rep,
         volume: vol_rep,
+        stl_safe: stl_rep,
     })
 }
 
@@ -470,7 +493,7 @@ fn pipeline(
     for stage in PIPELINE {
         let t0 = Instant::now();
         // Guard: a step that gives more open + non-manifold edges than
-        // before is undone. The Windows steps reduce these numbers; a step
+        // before is undone. The 12 steps reduce these numbers; a step
         // that does not is wrong for this mesh.
         let snapshot = mesh.clone();
         let mut count = if stage == Stage::Wrap && o_wrap(opts) {

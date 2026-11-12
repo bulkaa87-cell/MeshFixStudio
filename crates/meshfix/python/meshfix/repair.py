@@ -1,16 +1,14 @@
-"""meshfix repair: the steps of the Windows repair, in Rust.
+"""meshfix repair: the mesh repair in Rust.
 
 SHARED CODE: this module was fs_meshfix.py of OpenFOAM Studio. MeshFix
 Studio and OpenFOAM Studio both use it (see PLAN.md).
 
 WHAT IT IS. The method «Windows» of the «Repair» menu (meshfix.winfix)
-calls the Windows service
-(Windows.Graphics.Printing.3D.dll, Printing3DModel.RepairAsync). meshfix
-(crates/meshfix, module meshfix._native) does the same 12 steps in the same order
-and with the same tolerances: stitch, close holes of 3 edges, remove
-doubles, orient the normals, close all holes, "wrap", remove degenerate
-faces and tiny shells. The comments of crates/meshfix/src/stages.rs
-describe the steps.
+calls the 3D-model repair service of Windows. meshfix (crates/meshfix,
+module meshfix._native) repairs the mesh itself in 12 steps: stitch,
+close holes of 3 edges, remove doubles, orient the normals, close all
+holes, "wrap", remove degenerate faces and tiny shells. The result is close to the Windows 3D-model repair; this is checked by measurements on test meshes.
+The comments of crates/meshfix/src/stages.rs describe the steps.
 
 DIFFERENCES FROM THE SERVICE (measured on tests/meshfix_cases.py):
 - it works without WinRT and outside Windows, with no 3MF exchange;
@@ -26,6 +24,12 @@ DIFFERENCES FROM THE SERVICE (measured on tests/meshfix_cases.py):
 - the Wrap step cuts all faces against each other and keeps the faces
   between inside and outside by the winding number of the whole input
   (also of open parts). Steps after it do not make faces cross.
+- the last step StlSafe (crates/meshfix/src/stlsafe.rs) makes the result
+  keep its counts after a write to STL (float32) and a read that joins
+  equal points: the copies of a pinched edge or vertex move apart by some
+  float32 steps (about 1e-3 mm on a model of 3 m), and faces that the
+  rounding makes degenerate get a flip or a small vertex move. Report key
+  "stl_safe".
 - fallbacks, when the 12 steps do not give a closed mesh: first an alpha
   wrap of the input (shrunk onto the input), then a volumetric remesh.
   Each result is used only when it is closed and no count of the
@@ -66,6 +70,7 @@ STEP_NAMES = {
     "PrepareForExport": "T-junctions cut",
     "AlphaWrap": "alpha wrap, triangles",
     "VolumeRemesh": "volume rebuild, triangles",
+    "StlSafe": "points moved for STL",
 }
 
 # Text for the status line when a fallback replaced the result.

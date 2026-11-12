@@ -2,7 +2,7 @@
 name = "meshfix"
 version = "0.1.1"
 edition = "2021"
-description = "Repair of triangle surface meshes: the steps of the Windows 3D-print repair, and the geometry check"
+description = "Repair of triangle surface meshes (the result is close to the Windows 3D-model repair), and the geometry check"
 publish = false
 license.workspace = true
 repository.workspace = true
