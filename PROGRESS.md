@@ -110,6 +110,14 @@ keep it as a changelog.
       glTF (two objects, Z up, m), OBJ, PLY and STL; our reader reads a
       3MF project that OrcaSlicer wrote (components in other model files,
       the object names).
+    - meshfix.methods.repair_bodies(): the repair of each body, for both
+      programs.
+    - CI on the branch (workflow_dispatch, 68dcc6e): all four rows green,
+      also tests/test_built_app.py with each export format and a 3MF input
+      in the frozen program.
+    - OpenFOAM Studio (its branch wip/t50-formats) uses the formats when
+      the installed meshfix-core has them (fs_geometry.formats()); its pin
+      stays 0.2.0 until a release of 0.3.0 (the owner decides).
 
 ## Next
 
