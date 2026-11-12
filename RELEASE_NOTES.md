@@ -14,6 +14,9 @@ The program does not need Python.
 - meshfix: the result is close to the Windows 3D-model repair; this is
   checked by measurements on test meshes.
 - The same repair code as in OpenFOAM Studio.
+- The native modules keep no folder of the build computer: the build
+  replaces the source and Cargo folders with neutral names
+  (`--remap-path-prefix`).
 
 ## Download
 
