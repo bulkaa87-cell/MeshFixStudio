@@ -18,8 +18,10 @@ repository at a pinned version. Thus:
   `meshfix.repair.STEPS`). Use our own descriptive names. Do not rename an
   id without an entry in `LEGACY_STEP_IDS` (Python) and `LEGACY_STAGE_IDS`
   (Rust): a saved report or a script can have the old id.
-- File formats: `meshfix.check.READERS` and `WRITERS` (suffix -> function).
-  A new format is one entry there; the open dialog takes its file types from
+- File formats: `meshfix.formats.FORMATS` (key -> reader, writer, unit,
+  bodies, float32). `meshfix.check.READERS`, `WRITERS`, `save_mesh()` and
+  `export_filters()` come from this table. A new format is one entry
+  there; the open dialog takes its file types from
   READERS.
 
 ## The 3D view (foamview)

@@ -111,7 +111,8 @@ def _merge(meshes):
     return meshes[0].merge(list(meshes[1:]), merge_points=False)
 
 
-def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
+def repair_meshes(key: str, meshes, say=None, merged=None,
+                  stl_safe: bool = True) -> list:
     """Repaired copies of `meshes` (pyvista PolyData in m).
 
     mode(key) == "parts": one result for each input mesh, in the same order.
@@ -120,6 +121,10 @@ def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
 
     `say(text)` receives the progress texts. A text that ends with
     fs_meshfix.VERDICT tells what the repair did (a window keeps it).
+    stl_safe=False: the meshfix methods do not run their last step
+    stl_safe_output. A program that writes the result with
+    meshfix.check.save_mesh gives False: save_mesh applies the step only
+    at an export to STL (the other formats keep the points as they are).
     Raises RuntimeError when the method failed or is not available.
     Call it from a worker thread: a repair can take minutes.
     """
@@ -129,7 +134,7 @@ def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
     meshes = list(meshes)
     if mode(key) == "wrap":
         whole = merged if merged is not None else _merge(meshes)
-        return [fs_meshfix.repair(whole, say, method=key)]
+        return [fs_meshfix.repair(whole, say, method=key, stl_safe=stl_safe)]
     out = []
     for i, mesh in enumerate(meshes, 1):
         head = (tr("model {i} of {n_meshes}: ", i=i, n_meshes=len(meshes))
@@ -140,7 +145,8 @@ def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
         if key == "winfix":
             out.append(fs_winfix.repair(mesh, tell))
         else:
-            out.append(fs_meshfix.repair(mesh, tell, method=key))
+            out.append(fs_meshfix.repair(mesh, tell, method=key,
+                                          stl_safe=stl_safe))
     return out
 
 

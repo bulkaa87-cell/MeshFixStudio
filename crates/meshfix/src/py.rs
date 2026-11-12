@@ -26,9 +26,11 @@ fn info_dict<'py>(py: Python<'py>, i: &MeshInfo) -> PyResult<Bound<'py, PyDict>>
 /// alpha, offset: ball radius and offset of that wrap in the units of the
 /// points (None = from the model). volume: fallback 2, the volumetric
 /// remesh. method: "meshfix" (the 12 steps and the fallbacks), or one
-/// forced method, "alphawrap" or "volume" (see lib.rs `Method`).
+/// forced method, "alphawrap" or "volume" (see lib.rs `Method`). stl_safe:
+/// the last step stl_safe_output. A program that applies it only at an STL
+/// export (with the function `stl_safe`) gives false.
 #[pyfunction]
-#[pyo3(signature = (points, tris, normalize=true, wrap=true, stop_after=None, alpha_wrap=true, alpha=None, offset=None, volume=true, method="meshfix"))]
+#[pyo3(signature = (points, tris, normalize=true, wrap=true, stop_after=None, alpha_wrap=true, alpha=None, offset=None, volume=true, method="meshfix", stl_safe=true))]
 #[allow(clippy::too_many_arguments)]
 fn repair<'py>(
     py: Python<'py>,
@@ -42,6 +44,7 @@ fn repair<'py>(
     offset: Option<f64>,
     volume: bool,
     method: &str,
+    stl_safe: bool,
 ) -> PyResult<(Bound<'py, PyAny>, Bound<'py, PyAny>, Bound<'py, PyDict>)> {
     let method = Method::from_name(method)
         .ok_or_else(|| PyValueError::new_err(format!("method: no method {method}")))?;
@@ -79,6 +82,7 @@ fn repair<'py>(
         wrap_offset: offset,
         volume_fallback: volume,
         method,
+        stl_safe,
         ..Default::default()
     };
     let (mesh, report) = py.detach(move || {

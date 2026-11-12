@@ -1,7 +1,29 @@
-MeshFix Studio repairs triangle meshes (STL, OBJ, PLY): open a mesh, see
-its problems in 3D, repair it, and export a binary STL.
+MeshFix Studio repairs triangle meshes (STL, 3MF, OBJ, PLY, OFF, glTF,
+VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
+
+## What is new in 0.3.0 (not released)
+
+- Open and export: STL (binary and ASCII), 3MF, OBJ, PLY (binary and
+  ASCII), OFF, glTF (.glb, .gltf), VTP and legacy VTK. The export dialog
+  has a filter for each format; the extension selects the format.
+- 3MF: millimetres, one object for each body, the names of the bodies. The
+  reader takes the unit of the file, the components and transforms, and
+  the object names of Bambu Studio and OrcaSlicer.
+- Bodies: the objects of a file stay separate bodies. The repair repairs
+  each body alone. A format without bodies gets one merged body, and the
+  dialog and the log say so.
+- Units: 3MF and glTF give their unit; the other formats are written in
+  the units of the input file, and the log says that the format keeps no
+  unit.
+- The step «STL-safe output» runs at the export to STL and glTF (float32
+  coordinates), on the coordinates of the file. The other formats keep the
+  points of the repair as they are.
+- API: `meshfix.formats`, `meshfix.check.save_mesh()`, `format_for()`,
+  `export_filters()`, `split_bodies()`, `join_bodies()`;
+  `repair_meshes(..., stl_safe=False)` and `_native.repair(...,
+  stl_safe=False)`. `write_mesh()` stays as in 0.2.0.
 
 ## What is new in 0.2.0
 

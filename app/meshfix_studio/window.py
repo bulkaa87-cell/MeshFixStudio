@@ -1,8 +1,8 @@
 """MeshFix Studio: a small program that repairs one surface mesh.
 
-Open a mesh (STL, OBJ, PLY, VTP), look at its problems in 3D, repair it,
-export a binary STL. Start it with «meshfix-studio [file]» or
-«python -m meshfix_studio [file]».
+Open a mesh (STL, 3MF, OBJ, PLY, OFF, glTF, VTK), look at its problems in
+3D, repair it, export it in one of these formats. Start it with
+«meshfix-studio [file]» or «python -m meshfix_studio [file]».
 
 NO SECOND COPY OF THE REPAIR. The repair, the method list, the check and
 the 3D view are the shared packages of this repository. OpenFOAM Studio
@@ -18,10 +18,19 @@ uses the same packages:
 - meshfix.qt.RepairWorker and end_process: the worker thread and a safe
   end of the process while a repair still runs.
 
-UNITS. A mesh file has no units. The program guesses them from the size
-(meshfix.check.guess_scale), and the person can change them in «Units».
-The repair works in metres (its tolerances are in mm), and the export
-writes the file in the units of the input file.
+UNITS. Most mesh files have no units. The program guesses them from the
+size (meshfix.check.guess_scale), and the person can change them in
+«Units». A 3MF or glTF file gives its unit. The repair works in metres
+(its tolerances are in mm). The export writes a format without a unit in
+the units of the input file, 3MF in mm and glTF in m.
+
+BODIES. A file can have several bodies (3MF objects, OBJ objects, ASCII
+STL solids, glTF nodes). The repair repairs each body alone, and the
+export keeps them where the format can (meshfix.formats).
+
+STL-SAFE OUTPUT. The repair here does not run the step stl_safe_output.
+The export applies it to the file coordinates, only for STL and glTF
+(float32 coordinates): meshfix.check.save_mesh.
 
 LANGUAGE. English by default. «View → Language» selects Ukrainian; FS_LANG
 overrides the setting. The texts are English keys of meshfix.i18n
@@ -144,6 +153,22 @@ def _state_of(mesh) -> State:
                  geo.problem_layers(mesh, diag))
 
 
+def repair_bodies(key: str, mesh, say=None):
+    """Repair each body of `mesh` alone (meshfix.methods.repair_meshes), and
+    keep the body names. A method that makes one shell of all bodies
+    (mode "wrap") gives one body. No stl_safe_output step here: the export
+    applies it to STL and glTF only. Worker thread."""
+    bodies = geo.split_bodies(mesh)
+    outs = fs_repair.repair_meshes(key, [m for _n, m in bodies], say,
+                                   stl_safe=False)
+    if len(outs) != len(bodies):
+        return outs[0]
+    if len(bodies) == 1 and not bodies[0][0]:
+        return outs[0]
+    return geo.join_bodies([(name, out) for (name, _m), out
+                            in zip(bodies, outs)])
+
+
 class MeshViewport(vp.Viewport):
     """The shared «3D» view, without the «All» button (there is only the
     model here)."""
@@ -171,7 +196,9 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.state: State | None = None
         self.history: list[State] = []
         self.repaired: dict | None = None     # the last repair, for the info
-        self.export_check = None              # Diagnosis of the written STL
+        self.export_check = None              # Diagnosis of the written file
+        self.export_info = None               # meshfix.check.SaveInfo
+        self.unit_given = False               # the file gives its unit
         self._spots: list = []
         self._spot_at = -1
 
@@ -199,8 +226,9 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.addToolBar(bar)
 
         self.btn_open = QtWidgets.QPushButton("Open…")
-        self.btn_open.setToolTip("Open a mesh file: STL, OBJ, PLY, VTP. "
-                                 "You can also drop a file on the window.")
+        self.btn_open.setToolTip("Open a mesh file: STL, 3MF, OBJ, PLY, OFF, "
+                                 "glTF, VTP, VTK. You can also drop a file "
+                                 "on the window.")
         self.btn_open.clicked.connect(self.open_dialog)
         bar.addWidget(self.btn_open)
         bar.addSeparator()
@@ -211,8 +239,9 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             self.cmb_units.addItem(text, key)
         self.cmb_units.setToolTip(
             "Units of the numbers in the file. The program guesses them from "
-            "the size. The repair tolerances are in mm, thus the units must "
-            "be correct. The export keeps these units.")
+            "the size (a 3MF or glTF file gives its unit). The repair "
+            "tolerances are in mm, thus the units must be correct. The "
+            "export keeps these units; 3MF is always in mm, glTF in m.")
         self.cmb_units.activated.connect(self._units_chosen)
         bar.addWidget(self.cmb_units)
         bar.addSeparator()
@@ -232,8 +261,15 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         bar.addSeparator()
 
         self.btn_export = QtWidgets.QPushButton("Export…")
-        self.btn_export.setToolTip("Save the mesh as a binary STL, in the "
-                                   "units of the input file")
+        self.btn_export.setToolTip(
+            "Save the mesh: STL, 3MF, OBJ, PLY, OFF, glTF or VTK. The "
+            "extension selects the format. A format without a unit gets the "
+            "units of the input file; 3MF is in mm, glTF in m. 3MF, OBJ, "
+            "ASCII STL, glTF and VTK keep the bodies apart; the other "
+            "formats merge them.\nOnly for STL and glTF (float32 "
+            "coordinates): the program first moves the points that the "
+            "rounding would join or make into a flat triangle, by about "
+            "0.001 mm (the step «STL-safe output»).")
         self.btn_export.clicked.connect(self.export_dialog)
         bar.addWidget(self.btn_export)
         bar.addSeparator()
@@ -288,8 +324,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
                    "non_manifold_edges": vp.COL_NM,
                    "degenerate": vp.COL_DEGEN}
         rows = [("file", "File"), ("units", "Units"), ("size", "Size"),
-                ("triangles", "Triangles"), ("parts", "Parts"),
-                ("closed", "Closed")]
+                ("triangles", "Triangles"), ("bodies", "Bodies"),
+                ("parts", "Parts"), ("closed", "Closed")]
         rows += list(fs_repair.COUNTS)
         rows += [("volume", "Volume"), ("method", "Method"),
                  ("time", "Repair time")]
@@ -523,9 +559,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             return
         start = self.store.value("folder", str(Path.home()))
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, tr("Open a mesh"), start,
-            tr("Meshes ({patterns});;All files (*)",
-               patterns=" ".join("*" + s for s in SUFFIXES)))
+            self, tr("Open a mesh"), start, geo.open_filter())
         if path:
             self.open_file(path)
 
@@ -540,16 +574,18 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             say(tr("Reading {name}…", name=path.name))
             raw = geo.load_surface(str(path))
             factor, note = geo.guess_scale(raw)
+            given = geo.UNIT in raw.field_data
             mesh = geo.apply_scale(raw, factor)
             say(tr("Checking {name}…", name=path.name))
-            return path, factor, note, _state_of(mesh)
+            return path, factor, (note, given), _state_of(mesh)
         return self._start("load", job, tr("Reading {name}…", name=path.name))
 
     def _loaded(self, result):
-        path, factor, note, state = result
+        path, factor, (note, given), state = result
         self.path = path
         self.factor = factor
         self.unit_note = note
+        self.unit_given = given
         self.loaded = self.state = state
         self.history.clear()
         self.repaired = None
@@ -618,7 +654,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
 
         def job(_meshes, say):
             t0 = time.perf_counter()
-            out = fs_repair.repair_meshes(key, [before.mesh], say)[0]
+            out = repair_bodies(key, before.mesh, say)
             sec = time.perf_counter() - t0
             say(tr("Checking the result…"))
             return key, sec, fs_repair.summary(key), _state_of(out)
@@ -681,43 +717,68 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         stem = self.path.stem if self.path else "mesh"
         if self.repaired is not None or self.state is not self.loaded:
             stem += "_repaired"
-        path, _ = QtWidgets.QFileDialog.getSaveFileName(
-            self, tr("Export binary STL"), str(Path(folder) / f"{stem}.stl"),
-            tr("STL binary (*.stl)"))
+        key = str(self.store.value("export_format", "stl") or "stl")
+        if key not in geo.FORMATS:
+            key = "stl"
+        filters = geo.export_filters(geo.body_count(self.state.mesh))
+        texts = [text for _k, text in filters]
+        chosen = dict(filters)[key]
+        path, picked = QtWidgets.QFileDialog.getSaveFileName(
+            self, tr("Export"),
+            str(Path(folder) / (stem + geo.FORMATS[key].suffix)),
+            ";;".join(texts), chosen)
         if path:
-            self.export_file(path)
+            keys = [k for k, text in filters if text == picked]
+            self.export_file(path, keys[0] if keys else None)
 
-    def export_file(self, path) -> Path | None:
-        """Write the current mesh as a binary STL in the units of the input
-        file. Returns the path, or None on an error (a message box)."""
+    def export_file(self, path, fmt: str | None = None) -> Path | None:
+        """Write the current mesh to `path`. The format: `fmt` (a key of
+        meshfix.check.FORMATS, the filter of the dialog) when it has the
+        extension of the name, else the format of the extension. A name
+        without a known extension gets the extension of `fmt` (default
+        binary STL). A format without a unit is written in the units of
+        the input file. Returns the path, or None on an error (a message
+        box)."""
         if self.state is None:
             return None
         path = Path(path)
-        if path.suffix.lower() != ".stl":
-            path = path.with_suffix(".stl")
+        if path.suffix.lower() not in geo.READERS:
+            path = Path(str(path) + geo.FORMATS[fmt or "stl"].suffix)
         try:
-            out = geo.apply_scale(self.state.mesh, 1.0 / self.factor)
-            geo.write_mesh(out, path)
+            form = geo.format_for(path, fmt)
+            info = geo.save_mesh(self.state.mesh, path, form,
+                                 unit_m=self.factor)
         except Exception as exc:                          # noqa: BLE001
             QtWidgets.QMessageBox.critical(self, tr("Export failed"), str(exc))
             return None
         self.store.setValue("export_folder", str(path.parent))
-        text = tr("Exported {name} ({n} triangles, {units})",
-                  name=path.name, n=_num(self.state.diag.n_triangles),
-                  units=self.units_text())
+        self.store.setValue("export_format", form.key)
+        self.export_info = info
+        text = tr("Exported {name} ({format}, {n} triangles, {units})",
+                  name=path.name, format=geo.format_label(form),
+                  n=_num(self.state.diag.n_triangles), units=info.unit)
         self._say(text)
         self._note(text)
+        self._note(geo.save_note(info))
+        moved = sum((info.stl_safe or {}).get(k, 0)
+                    for k in ("moved", "collapsed", "flipped"))
+        if moved:
+            self._note(tr("STL-safe output: {n} changes (points moved by "
+                          "up to {d} {units})", n=_num(moved),
+                          d=f"{info.stl_safe.get('max_move', 0):.2g}",
+                          units=info.unit))
         self._check_export(path)
         return path
 
     def _check_export(self, path: Path):
-        """Read the written STL again and check it (worker thread).
+        """Read the written file again and check it (worker thread).
 
         STL keeps float32 coordinates and no topology: a reader joins equal
         points. Vertices that the repair keeps apart (the two copies of a
         pinched edge, points nearer than the float32 step) are then one
         point again, and the file can show problems that the mesh in memory
-        does not have. The person must know that.
+        does not have. The export applies the step «STL-safe output» for
+        this; when a problem stays, the person must know it.
         """
         want = self.state.diag
         self.export_check = None
@@ -742,12 +803,16 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             return
         parts = ", ".join(f"{tr(label)} {_num(a)} → {_num(b)}"
                           for label, a, b in lost)
-        text = tr("Check of {name}: the STL file is not the same as the mesh "
-                  "({parts}). STL keeps float32 coordinates, and a reader "
-                  "joins points at the same place: vertices that the repair "
-                  "keeps apart become one point again.",
-                  name=path.name, parts=parts)
-        self._say(tr("Check of {name}: the STL file has problems",
+        if path.suffix.lower() == ".stl":
+            text = tr("Check of {name}: the STL file is not the same as the "
+                      "mesh ({parts}). STL keeps float32 coordinates, and a "
+                      "reader joins points at the same place: vertices that "
+                      "the repair keeps apart become one point again.",
+                      name=path.name, parts=parts)
+        else:
+            text = tr("Check of {name}: the file is not the same as the mesh "
+                      "({parts}).", name=path.name, parts=parts)
+        self._say(tr("Check of {name}: the file has problems",
                      name=path.name))
         self._note(text)
         QtWidgets.QMessageBox.warning(self, "Export check", text)
@@ -818,13 +883,20 @@ class MeshFixWindow(QtWidgets.QMainWindow):
 
         info["file"].setText(self.path.name if self.path else "—")
         info["file"].setToolTip(str(self.path) if self.path else "")
-        info["units"].setText(unit + (tr("  (guessed: {note})",
-                                         note=self.unit_note)
-                                      if self.unit_note else ""))
+        if not self.unit_note:
+            info["units"].setText(unit)
+        elif self.unit_given:
+            info["units"].setText(unit + "  (" + self.unit_note + ")")
+        else:
+            info["units"].setText(unit + tr("  (guessed: {note})",
+                                            note=self.unit_note))
         sx, sy, sz = (s / f for s in d.size)
         info["size"].setText(f"{_real(sx)} × {_real(sy)} × {_real(sz)} {unit}")
         info["triangles"].setText(pair(_num, d0.n_triangles if d0 else d.n_triangles,
                                        d.n_triangles if d0 else None))
+        names = geo.body_names(st.mesh)
+        info["bodies"].setText(_num(max(1, len(names))))
+        info["bodies"].setToolTip(fs_i18n.join("\n", names[:50]))
         info["parts"].setText(pair(_num, d0.parts if d0 else d.parts,
                                    d.parts if d0 else None))
         yes_no = (lambda c: tr("yes") if c else tr("no"))
@@ -862,9 +934,10 @@ class MeshFixWindow(QtWidgets.QMainWindow):
     def about(self):
         QtWidgets.QMessageBox.about(
             self, "About MeshFix Studio",
-            tr("MeshFix Studio {version} repairs a triangle mesh (STL, OBJ, "
-               "PLY) with meshfix (Rust), alpha wrap, the Windows repair "
-               "service (on Windows only) and the volume rebuild.\n\n"
+            tr("MeshFix Studio {version} repairs a triangle mesh (STL, 3MF, "
+               "OBJ, PLY, OFF, glTF, VTK) with meshfix (Rust), alpha wrap, "
+               "the Windows repair service (on Windows only) and the volume "
+               "rebuild.\n\n"
                "Problems in the 3D view: red — holes (open edges), magenta "
                "— flipped faces, yellow — non-manifold edges, green — "
                "degenerate faces.\n\n3D: {level}\nCore: meshfix "
