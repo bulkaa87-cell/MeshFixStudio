@@ -2,7 +2,7 @@
 
 Each case is a pair (points in mm, triangles). The units are mm because the
 two repairs measure their tolerances in mm. The cases are the same in
-rust/meshfix/src/tests.rs, so the Python comparison and the cargo tests use
+crates/meshfix/src/tests.rs, so the Python comparison and the cargo tests use
 one set of defects.
 
 stats() gives the numbers that the comparison table shows.

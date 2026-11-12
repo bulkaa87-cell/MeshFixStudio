@@ -1,9 +1,12 @@
 # MeshFix Studio as a separate program: the design
 
-Status: 2026-11-11. The prototype in this repository works on Windows (see
-"Status of the prototype"). The code in `crates/*/python` and `app/` is a
-STAGING COPY of OpenFOAM Studio (OFS) code. OFS does not use this repository
-yet.
+Status: 2026-11-12. CI builds the program for Windows, macOS and Linux (see
+"Status of the prototype"). Since version 0.2.0 (branch wip/t48-shared) OFS
+uses the packages of this repository for the repair, the method list, the
+language engine and the native module of the 3D view (section 5, "Step 1").
+The other parts of `crates/*/python` (meshfix.check, meshfix.qt,
+foamview.level, foamview.qtwidget, foamview.viewport) are still copies of
+OFS code (section 5, "Step 2").
 
 ## 1. Decisions of the owner
 
@@ -119,6 +122,18 @@ The rule of the OFS CLAUDE.md «Interface languages» stays: each text in
 English and Ukrainian, in the same commit, in the package that has the text.
 
 ## 5. What moves, and what OFS must change
+
+Step 1 (T48, version 0.2.0): OFS pins `meshfix-core` and `foamview`
+(`requirements.txt`, `fs_shared.PINNED`). `fs_meshfix`, `fs_repair`,
+`fs_winfix` and `fs_i18n` are alias modules. `fs_view3d` imports
+`foamview._native`. `rust/meshfix` and `rust/foamview` are removed from
+OFS. The repair steps have new ids (`LEGACY_STEP_IDS` keeps the old ones).
+
+Step 2 (later): the rows of the table below that are not done yet:
+`fs_geometry` -> `meshfix.check`, `RepairWorker` -> `meshfix.qt`,
+`foam_studio.Viewport` -> `foamview.viewport` (`CaseViewport`),
+`fs_view3d*` -> `foamview.level` / `foamview.qtwidget`, `fs_meshfix_app.py`
+removed from OFS, `tools/gpucheck` moved here.
 
 | OFS now | Here | OFS after the switch |
 |---|---|---|
@@ -335,6 +350,8 @@ The release v0.1.0 is out (2026-11-11), with the files of all four
 systems. CI is green on all four rows.
 
 1. T31 is in `crates/meshfix` (branch wip/stlsafe, for v0.1.2).
-2. The switch of OFS (section 5), in one OFS branch, with the OFS tests.
+2. The switch of OFS (section 5): step 1 in the branches wip/t48-shared of
+   both repositories (version 0.2.0, the owner decides about the release);
+   step 2 later.
 3. Translate the Ukrainian code comments of the staging copy to English.
 4. Make the build smaller (section 6).
