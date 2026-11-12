@@ -88,7 +88,7 @@ if sys.platform == "darwin":
         icon=icon,
         bundle_identifier="io.github.bulkaa87-cell.meshfixstudio",
         info_plist={
-            "CFBundleShortVersionString": "0.1.1",
+            "CFBundleShortVersionString": "0.1.2",
             "NSHighResolutionCapable": True,
             "CFBundleDocumentTypes": [{
                 "CFBundleTypeName": "STL mesh",

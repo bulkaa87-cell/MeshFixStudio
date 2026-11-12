@@ -154,7 +154,7 @@ Other OFS changes:
 - `tools/build_rust.ps1`: no build of `meshfix` and `foamview`.
 - The GitHub export of OFS: fewer files (no `rust/meshfix`, `rust/foamview`).
 - Two texts changed here, with their Ukrainian translations: the tooltip
-  of the meshfix method (no reference to `devlog/meshfix.md`) and the
+  of the meshfix method (no reference to private notes) and the
   `why_not()` text (`meshfix.repair._OFS_TEXT = True` gives the old OFS
   text with `tools\build_rust.ps1`).
 
@@ -334,7 +334,7 @@ The method «Windows» (`winfix`, the Printing3D service through pywinrt):
 The release v0.1.0 is out (2026-11-11), with the files of all four
 systems. CI is green on all four rows.
 
-1. T31 into `crates/meshfix` (section 8).
+1. T31 is in `crates/meshfix` (branch wip/stlsafe, for v0.1.2).
 2. The switch of OFS (section 5), in one OFS branch, with the OFS tests.
 3. Translate the Ukrainian code comments of the staging copy to English.
 4. Make the build smaller (section 6).

@@ -3,7 +3,8 @@
 1. The native module: it is there, and it has the repair and the check.
 2. The check: the Rust path and the VTK/numpy path give the same counts.
 3. The repair (meshfix) of the test meshes of tests/meshfix_cases.py:
-   watertight and oriented, no crossing faces, the known thresholds.
+   watertight and oriented, no crossing faces, the known thresholds, and
+   the STL round trip of each result (binary STL in mm and in m).
 4. The method list: the Windows method only on Windows.
 5. The languages: English keys, the Ukrainian catalogue of the core.
 
@@ -110,6 +111,31 @@ def part_repair():
             cr = mf._rs.crossings(np.ascontiguousarray(q, np.float64),
                                   np.ascontiguousarray(f, np.int64))
             check(f"{name}: no crossing faces", len(cr) == 0, f"{len(cr)} faces")
+    # The STL round trip (StlSafe step, from T31 of OpenFOAM Studio): the
+    # result written as a binary STL (float32) in mm and in m, read with
+    # the loader (equal points join), keeps the counts and stays closed.
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="meshfix_stl_")
+
+    def rt_counts(d):
+        return (d.open_edges, d.flipped_faces, d.non_manifold_edges,
+                d.degenerate, d.n_triangles)
+    for name, (p, t) in mc.cases().items():
+        if name in EMPTY:
+            continue
+        res = mf.repair(poly(p, t))
+        want = rt_counts(geo.diagnose(res))
+        for unit, factor in (("mm", 1000.0), ("m", 1.0)):
+            path = os.path.join(tmp, f"{name}_{unit}.stl")
+            geo.write_stl(geo.apply_scale(res, factor), path, binary=True)
+            got_mesh = geo.apply_scale(geo.load_surface(path), 1.0 / factor)
+            got = rt_counts(geo.diagnose(got_mesh))
+            s = mc.stats(*back(got_mesh))
+            check(f"{name}: STL in {unit} read again: same counts, closed",
+                  got == want and s["open"] == 0 and s["nm"] == 0
+                  and s["flip"] == 0, f"{want} -> {got}, {s}")
+    check("report has stl_safe", mf.last_report is not None
+          and "stl_safe" in mf.last_report, str(list(mf.last_report or {})))
     v = {n: out[n]["V"] for n in out if n.startswith("seam") and "V" in out[n]}
     check("seam stitched below 0.01 normalized, filled above",
           v.get("seam_0.009") == 8 and v.get("seam_0.011") == 10

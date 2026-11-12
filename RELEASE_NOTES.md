@@ -3,20 +3,17 @@ its problems in 3D, repair it, and export a binary STL.
 
 The program does not need Python.
 
-## What is new in 0.1.1
+## What is new in 0.1.2
 
-- The MeshFix Studio logo: the window, the installer, the Start menu, the
-  macOS app and the Linux AppImage use it.
-- macOS: the app has an ad-hoc signature (free, without an Apple account).
-  Thus Apple silicon starts it after one «Open Anyway» step.
-- The release has `SHA256SUMS.txt`, and each installer and wheel has a
-  build provenance attestation (see «Check the download»).
-- The license is now «GPL-3.0-or-later»: the GNU General Public License,
-  version 3 or (at your option) any later version. The text of `LICENSE`
-  is the same.
-- The build of Linux takes its system packages from five mirrors in turn:
-  the Ubuntu mirrors did not answer some build computers.
-- The repair and the 3D view did not change.
+- A repaired mesh keeps its counts after the export to STL. STL keeps
+  float32 coordinates, and a reader joins points at the same place. Thus
+  two copies of a pinched edge or vertex became one point again, and the
+  file showed non-manifold edges or degenerate faces that the mesh in the
+  program did not have. A last repair step (StlSafe) now moves such copies
+  apart by a few float32 steps (about 0.001 mm on a model of 3 m).
+- meshfix: the result is close to the Windows 3D-model repair; this is
+  checked by measurements on test meshes.
+- The same repair code as in OpenFOAM Studio.
 
 ## Download
 

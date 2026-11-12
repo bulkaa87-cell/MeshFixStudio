@@ -10,7 +10,8 @@ and export a binary STL.
   non-manifold edges (yellow), degenerate triangles (green). «Next Problem»
   moves the camera to the next problem.
 - Repair methods:
-  - **meshfix**: the steps of the Windows 3D-print repair, in Rust. It
+  - **meshfix**: a repair in Rust. The result is close to the Windows
+    3D-model repair; this is checked by measurements on test meshes. It
     stitches gaps, removes duplicates, makes the normals consistent, closes
     holes, merges bodies that cut into each other, and removes tiny shells.
     The surface stays in place.
@@ -80,8 +81,7 @@ You need Python 3.10 or newer and Rust (stable).
 
     python -m venv .venv
     .venv/bin/python -m pip install maturin pyinstaller pillow six
-    .venv/bin/maturin develop --release -m crates/meshfix/Cargo.toml
-    .venv/bin/maturin develop --release -m crates/foamview/Cargo.toml
+    .venv/bin/python tools/build_wheels.py --develop
     PYTHONPATH=app .venv/bin/python -m meshfix_studio
 
 On Windows, use `.venv\Scripts\` instead of `.venv/bin/`, and

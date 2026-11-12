@@ -50,6 +50,7 @@
  "overall size {span:.0f} — most likely millimeters": "габарит {span:.0f} — найімовірніше міліметри",
  "overall size {span:.4g} — looks like meters": "габарит {span:.4g} — схоже на метри",
  "overall size {span:.5g} — maybe kilometers or an error": "габарит {span:.5g} — можливо кілометри або помилка",
+ "points moved for STL": "точок зсунуто для STL",
  "preparing the package for the repair service": "готую пакунок для служби ремонту",
  "reading the repaired model": "читаю полагоджену модель",
  "repair with the Windows service — about half a minute for 250 k triangles": "ремонт службою Windows — на 250 тис. трикутників близько пів хвилини",

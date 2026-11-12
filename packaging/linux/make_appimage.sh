@@ -1,7 +1,7 @@
 #!/bin/sh
 # Make the Linux AppImage from the PyInstaller folder.
 #
-#   sh packaging/linux/make_appimage.sh 0.1.1
+#   sh packaging/linux/make_appimage.sh 0.1.2
 #
 # Input: "dist/MeshFix Studio/" and the icons in packaging/icons/.
 # Output: dist/MeshFix-Studio-<version>-linux-x86_64.AppImage.
@@ -9,7 +9,7 @@
 # APPIMAGE_EXTRACT_AND_RUN). Build on the oldest Linux that you support:
 # the AppImage needs the glibc of the build system or newer.
 set -eu
-VERSION="${1:-0.1.1}"
+VERSION="${1:-0.1.2}"
 SRC="dist/MeshFix Studio"
 APPDIR="build/AppDir"
 OUT="dist/MeshFix-Studio-${VERSION}-linux-x86_64.AppImage"
