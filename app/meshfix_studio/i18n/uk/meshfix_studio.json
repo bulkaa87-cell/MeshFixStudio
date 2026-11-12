@@ -31,7 +31,7 @@
  "Language": "Мова",
  "Log": "Журнал",
  "Main": "Головна",
- "MeshFix Studio {version} repairs a triangle mesh (STL, OBJ, PLY) with meshfix (Rust), alpha wrap, the Windows repair service (on Windows only) and the volume rebuild.\n\nProblems in the 3D view: red — holes (open edges), magenta — flipped faces, yellow — non-manifold edges, green — degenerate faces.\n\n3D: {level}\nCore: meshfix {core}\n\nLicense: GNU GPL version 3. Source code: {url}": "MeshFix Studio {version} лагодить трикутну сітку (STL, OBJ, PLY): meshfix (Rust), alpha wrap, служба ремонту Windows (лише у Windows) і перебудова об’єму.\n\nПроблеми в 3D: червоне — дірки (відкриті ребра), пурпурне — вивернуті грані, жовте — non-manifold ребра, зелене — вироджені грані.\n\n3D: {level}\nЯдро: meshfix {core}\n\nЛіцензія: GNU GPL версії 3. Код: {url}",
+ "MeshFix Studio {version} repairs a triangle mesh (STL, OBJ, PLY) with meshfix (Rust), alpha wrap, the Windows repair service (on Windows only) and the volume rebuild.\n\nProblems in the 3D view: red — holes (open edges), magenta — flipped faces, yellow — non-manifold edges, green — degenerate faces.\n\n3D: {level}\nCore: meshfix {core}\n\nLicense: GNU GPL version 3 or later. Source code: {url}": "MeshFix Studio {version} лагодить трикутну сітку (STL, OBJ, PLY): meshfix (Rust), alpha wrap, служба ремонту Windows (лише у Windows) і перебудова об’єму.\n\nПроблеми в 3D: червоне — дірки (відкриті ребра), пурпурне — вивернуті грані, жовте — non-manifold ребра, зелене — вироджені грані.\n\n3D: {level}\nЯдро: meshfix {core}\n\nЛіцензія: GNU GPL версії 3 або новішої. Код: {url}",
  "Meshes ({patterns});;All files (*)": "Сітки ({patterns});;Усі файли (*)",
  "Method": "Метод",
  "No problem spots found": "Проблемних місць не знайдено",

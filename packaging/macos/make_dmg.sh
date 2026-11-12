@@ -6,11 +6,10 @@
 # Input: "dist/MeshFix Studio.app". Output:
 # dist/MeshFix-Studio-<version>-macos-<arch>.dmg.
 #
-# The app has only an ad-hoc signature (codesign -s -), not a Developer ID
-# signature, and it is not notarized. macOS then blocks the first start:
-# the person must open it with right click > Open, or allow it in System
-# Settings > Privacy & Security. A Developer ID signature and notarization
-# need an Apple Developer account (see PLAN.md).
+# The app gets an ad-hoc signature (codesign -s -): free, no Apple account.
+# Apple silicon does not start an app without a signature. The app is not
+# notarized: macOS asks one time at the first start (System Settings >
+# Privacy & Security > Open Anyway, or right click > Open).
 set -eu
 VERSION="${1:-0.1.0}"
 ARCH="${2:-$(uname -m)}"
@@ -22,6 +21,15 @@ STAGE="$(mktemp -d)"
 cp -R "$APP" "$STAGE/"
 ln -s /Applications "$STAGE/Applications"
 rm -f "$OUT"
-hdiutil create -volname "MeshFix Studio" -srcfolder "$STAGE" -ov -format ULMO "$OUT"
+# hdiutil fails sometimes with "Resource busy" on the CI runners (a scan of
+# the new files): try again.
+n=0
+until hdiutil create -volname "MeshFix Studio" -srcfolder "$STAGE" -ov -format ULMO "$OUT"; do
+    n=$((n + 1))
+    if [ "$n" -ge 5 ]; then
+        exit 1
+    fi
+    sleep 10
+done
 rm -rf "$STAGE"
 echo "$OUT"

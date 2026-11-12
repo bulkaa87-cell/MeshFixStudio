@@ -32,16 +32,47 @@ both programs use the packages of this repository.
 
 ## Download
 
-There is no release yet. The installers will be on the
+The installers are on the
 [Releases](https://github.com/bulkaa87-cell/MeshFixStudio/releases) page:
 
-| System | File | First start |
-|---|---|---|
-| Windows 10, 11 (x64) | `MeshFix-Studio-<version>-windows-x64-setup.exe` | The installer has no code signature yet: in «Windows protected your PC», click «More info», then «Run anyway». |
-| macOS 11 or newer (Apple silicon or Intel) | `MeshFix-Studio-<version>-macos-arm64.dmg` or `-x86_64.dmg` | The app is not notarized yet: right click the app, then «Open». Or System Settings > Privacy & Security > «Open Anyway». |
-| Linux x86_64 (glibc 2.35 or newer) | `MeshFix-Studio-<version>-linux-x86_64.AppImage` | `chmod +x MeshFix-Studio-*.AppImage`, then start it. |
+| System | File |
+|---|---|
+| Windows 10, 11 (x64) | `MeshFix-Studio-<version>-windows-x64-setup.exe` |
+| macOS 11 or newer, Apple silicon | `MeshFix-Studio-<version>-macos-arm64.dmg` |
+| macOS 11 or newer, Intel | `MeshFix-Studio-<version>-macos-x86_64.dmg` |
+| Linux x86_64 (glibc 2.35 or newer) | `MeshFix-Studio-<version>-linux-x86_64.AppImage` |
 
 The program does not need Python.
+
+## First start
+
+The program has no paid code signature. Thus each system asks one time:
+
+- Windows: SmartScreen shows «Windows protected your PC». Click «More info»,
+  then «Run anyway». Windows keeps this warning for each version: a free
+  code signing certificate without an application does not exist.
+- macOS: the app has an ad-hoc signature, but it is not notarized. macOS
+  says that it cannot check the app. Open System Settings > Privacy &
+  Security, and click «Open Anyway». On macOS 14 and older, you can also
+  right click the app, then «Open».
+- Linux: make the AppImage executable, then start it:
+  `chmod +x MeshFix-Studio-<version>-linux-x86_64.AppImage`.
+- The first start takes about 20 seconds: the program tests the GPUs of
+  the computer one time, and then it remembers the result.
+
+## Check the download
+
+Each release has the file `SHA256SUMS.txt`, and GitHub keeps a build
+provenance attestation for each installer: a signed record that GitHub
+Actions of this repository built the file from the source code of the tag.
+
+1. Compare the SHA256 of the file with its line in `SHA256SUMS.txt`:
+   - Windows (PowerShell): `Get-FileHash .\MeshFix-Studio-<version>-windows-x64-setup.exe`
+   - macOS: `shasum -a 256 MeshFix-Studio-<version>-macos-arm64.dmg`
+   - Linux: `sha256sum -c SHA256SUMS.txt --ignore-missing`
+2. Examine the attestation with the GitHub CLI:
+
+       gh attestation verify MeshFix-Studio-<version>-windows-x64-setup.exe --repo bulkaa87-cell/MeshFixStudio
 
 ## Build from the source code
 
@@ -85,4 +116,7 @@ OpenFOAM Studio uses these packages, and the installers.
 
 ## License
 
-GNU General Public License version 3. See `LICENSE`.
+MeshFix Studio is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by the
+Free Software Foundation, either version 3 of the License, or (at your
+option) any later version. See `LICENSE` (SPDX: `GPL-3.0-or-later`).

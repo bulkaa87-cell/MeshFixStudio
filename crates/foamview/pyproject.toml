@@ -7,10 +7,10 @@ name = "foamview"
 dynamic = ["version"]
 description = "3D view for triangle meshes (wgpu on a GPU or a software adapter, VTK and CPU fallbacks) for Qt programs"
 readme = "../../README.md"
-license = { text = "GPL-3.0-only" }
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.10"
 classifiers = [
-    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
     "Programming Language :: Python :: 3",
     "Programming Language :: Rust",
 ]

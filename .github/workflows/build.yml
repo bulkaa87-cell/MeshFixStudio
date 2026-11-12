@@ -40,6 +40,11 @@ jobs:
   build:
     name: ${{ matrix.name }}
     needs: rust
+    permissions:
+      contents: read
+      # Build provenance attestations (free, no application needed).
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -74,26 +79,34 @@ jobs:
 
       - name: Linux packages (Qt, Mesa llvmpipe and lavapipe, Xvfb)
         if: matrix.target == 'linux'
-        # The Ubuntu mirrors did not answer the runners on 2026-11-11. The
-        # image has most libraries already: without the step, the tests run
-        # with the offscreen platform of Qt, not under Xvfb.
-        continue-on-error: true
-        timeout-minutes: 8
+        # PySide6 needs libEGL: without these packages no test can run.
+        # The Ubuntu mirrors did not answer some runners (2026-11-11 and
+        # 2026-11-12): try one mirror after the other, each with a limit.
+        timeout-minutes: 25
         run: |
-          # Use the main Ubuntu mirror, with short timeouts.
-          if [ -f /etc/apt/apt-mirrors.txt ]; then
-            # The runner did not resolve the ubuntu.com names (2026-11-11):
-            # a mirror on another domain comes first.
-            printf 'http://mirrors.edge.kernel.org/ubuntu/\tpriority:1\nhttp://archive.ubuntu.com/ubuntu/\tpriority:2\nhttp://security.ubuntu.com/ubuntu/\n' | sudo tee /etc/apt/apt-mirrors.txt
-          fi
-          APT="-o Acquire::Retries=1 -o Acquire::http::Timeout=15"
-          for i in 1 2 3; do sudo apt-get $APT update && break; sleep 20; done
-          sudo apt-get install -y --no-install-recommends $APT \
-            libegl1 libgl1 libgl1-mesa-dri mesa-vulkan-drivers libvulkan1 \
-            libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4 \
-            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 \
-            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libfontconfig1 \
-            libdbus-1-3 libxrender1 libxi6 libsm6 xvfb fonts-dejavu-core
+          PKGS="libegl1 libgl1 libgl1-mesa-dri mesa-vulkan-drivers libvulkan1
+            libxkbcommon0 libxkbcommon-x11-0 libxcb-cursor0 libxcb-icccm4
+            libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0
+            libxcb-shape0 libxcb-xinerama0 libxcb-xkb1 libfontconfig1
+            libdbus-1-3 libxrender1 libxi6 libsm6 xvfb fonts-dejavu-core"
+          APT="-o Acquire::Retries=2 -o Acquire::http::Timeout=20"
+          for m in http://archive.ubuntu.com/ubuntu/ \
+                   http://mirrors.edge.kernel.org/ubuntu/ \
+                   http://azure.archive.ubuntu.com/ubuntu/ \
+                   http://mirror.math.princeton.edu/pub/ubuntu/ \
+                   http://ftp.halifax.rwth-aachen.de/ubuntu/; do
+            echo "== mirror $m"
+            if [ -f /etc/apt/apt-mirrors.txt ]; then
+              printf '%s\n' "$m" | sudo tee /etc/apt/apt-mirrors.txt >/dev/null
+            else
+              sudo sed -i -E "s#http://[^ ]+/ubuntu/?#${m%/}#g" /etc/apt/sources.list
+            fi
+            if sudo timeout 180 apt-get $APT update &&
+               sudo timeout 300 apt-get install -y --no-install-recommends $APT $PKGS; then
+              exit 0
+            fi
+          done
+          exit 1
 
       - uses: actions/setup-python@v5
         with:
@@ -171,6 +184,17 @@ jobs:
         if: matrix.target == 'linux'
         run: sh packaging/linux/make_appimage.sh "${{ steps.version.outputs.version }}"
 
+      - name: Build provenance attestation (installer and wheels)
+        # A pull request from a fork gets no id-token: skip it there.
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            wheels/*.whl
+
       - name: Upload the installer
         uses: actions/upload-artifact@v4
         with:
@@ -209,6 +233,7 @@ jobs:
           mkdir -p release
           find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.whl' \) -exec cp {} release/ \;
           ls -l release
+          (cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           cp RELEASE_NOTES.md notes.md
           missing=""
           ls release/*windows-x64-setup.exe >/dev/null 2>&1 || missing="$missing Windows x64,"

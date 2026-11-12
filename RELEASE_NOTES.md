@@ -1,7 +1,7 @@
 MeshFix Studio repairs triangle meshes (STL, OBJ, PLY): open a mesh, see
 its problems in 3D, repair it, and export a binary STL.
 
-This is the first release. The program does not need Python.
+The program does not need Python.
 
 ## Download
 
@@ -18,14 +18,33 @@ program.
 
 ## First start
 
-- Windows: the installer has no code signature yet. In «Windows protected
-  your PC», click «More info», then «Run anyway». The installer asks: for
-  you only (no administrator rights) or for all users.
-- macOS: the app is not notarized yet. Right click the app, then «Open»,
-  or System Settings > Privacy & Security > «Open Anyway».
-- Linux: `chmod +x MeshFix-Studio-*.AppImage`, then start it.
+The program has no paid code signature. Thus each system asks one time:
+
+- Windows: SmartScreen shows «Windows protected your PC». Click «More info»,
+  then «Run anyway». Windows keeps this warning for each version: a free
+  code signing certificate without an application does not exist.
+- macOS: the app has an ad-hoc signature, but it is not notarized. macOS
+  says that it cannot check the app. Open System Settings > Privacy &
+  Security, and click «Open Anyway». On macOS 14 and older, you can also
+  right click the app, then «Open».
+- Linux: make the AppImage executable, then start it:
+  `chmod +x MeshFix-Studio-<version>-linux-x86_64.AppImage`.
 - The first start takes about 20 seconds: the program tests the GPUs of
   the computer one time, and then it remembers the result.
+
+## Check the download
+
+Each release has the file `SHA256SUMS.txt`, and GitHub keeps a build
+provenance attestation for each installer: a signed record that GitHub
+Actions of this repository built the file from the source code of the tag.
+
+1. Compare the SHA256 of the file with its line in `SHA256SUMS.txt`:
+   - Windows (PowerShell): `Get-FileHash .\MeshFix-Studio-<version>-windows-x64-setup.exe`
+   - macOS: `shasum -a 256 MeshFix-Studio-<version>-macos-arm64.dmg`
+   - Linux: `sha256sum -c SHA256SUMS.txt --ignore-missing`
+2. Examine the attestation with the GitHub CLI:
+
+       gh attestation verify MeshFix-Studio-<version>-windows-x64-setup.exe --repo bulkaa87-cell/MeshFixStudio
 
 ## Known limits
 
