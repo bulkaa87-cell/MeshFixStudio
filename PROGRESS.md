@@ -163,6 +163,10 @@ keep it as a changelog.
 17. Version 0.3.1 (wip/t12b-folded2): B is on by default
     (RepairOptions::fold_line_angle = 1e-4; MESHFIX_FOLD_VERTS=0 turns it
     off). A1 and A2 stay off. The owner selected B (2026-11-12).
+    main 232d4bd (fast forward), CI green on the four systems, tag v0.3.1
+    pushed; the release comes from the tag build. Next: check the release
+    (files, SHA256SUMS.txt, attestations, the Windows installer), then the
+    pin 0.3.1 in OpenFOAM Studio (its branch wip/t12b-pin031, tests green).
 
 ## Next
 
