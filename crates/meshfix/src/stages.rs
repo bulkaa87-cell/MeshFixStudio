@@ -527,6 +527,8 @@ pub fn merge_mode_winding() -> bool {
 pub fn merge_bodies_winding(mesh: &mut Mesh) -> (usize, crate::arrange::ArrangeReport) {
     let t = std::time::Instant::now();
     let before_split = mesh.clone();
+    // T12b (test only): the input of the union, for close_inner_folds.
+    let fold_input = std::env::var_os("MESHFIX_FOLD_CLOSE").map(|_| mesh.clone());
     let defects = mesh.defect_edges();
     split_nonmanifold(mesh);
     if mesh.defect_edges() > defects {
@@ -561,6 +563,16 @@ pub fn merge_bodies_winding(mesh: &mut Mesh) -> (usize, crate::arrange::ArrangeR
         let _ = mesh.write_obj(std::path::Path::new(&p));
     }
     winding_post(mesh);
+    if let Some(input) = fold_input {
+        let env_f = |k: &str, d: f64| std::env::var(k).ok().and_then(|s| s.parse::<f64>().ok()).unwrap_or(d);
+        let tol = env_f("MESHFIX_FOLD_CLOSE", 0.01);
+        let w_min = env_f("MESHFIX_FOLD_WMIN", 0.75);
+        let r = crate::folds::close_inner_folds(mesh, &input, tol, w_min);
+        if std::env::var_os("MESHFIX_TIMING").is_some() {
+            eprintln!("winding inner folds {r:?}\n  after {:?}", crate::mesh_info(mesh));
+        }
+        crate::union::dbg_time("winding inner folds", t);
+    }
     if let Some(p) = std::env::var_os("MESHFIX_DUMP_WRAP") {
         let _ = mesh.write_obj(std::path::Path::new(&p));
     }

@@ -881,8 +881,20 @@ fn arrange(mesh: &mut Mesh) -> ArrangeReport {
     }
 
     // Kept faces: inside behind, outside in front (else turned).
-    let keep: Vec<bool> = (0..np).map(|f| inside[2 * f] != inside[2 * f + 1]).collect();
+    let mut keep: Vec<bool> = (0..np).map(|f| inside[2 * f] != inside[2 * f + 1]).collect();
     let flip: Vec<bool> = (0..np).map(|f| inside[2 * f]).collect();
+    // T12b (option MESHFIX_FOLD_PIECES, test only): a kept piece that folds
+    // onto a kept neighbor (normals more than about 170 degrees apart) goes
+    // when its own side samples put the input inside on both sides. The
+    // label of a patch is the label of most of its area; such a piece is a
+    // wall of a thin crack inside the body. The open edges that this gives
+    // are closed by the steps after the union.
+    if let Ok(mode) = std::env::var("MESHFIX_FOLD_PIECES") {
+        let gone = remove_inner_fold_pieces(&mode, &edges, &tris, &v, &src, &src_unit, &fwn, side_eps, &flip, &mut keep);
+        if std::env::var_os("MESHFIX_TIMING").is_some() {
+            eprintln!("fold pieces ({mode}): {gone} kept pieces removed");
+        }
+    }
     rep.kept = keep.iter().filter(|&&k| k).count();
     rep.removed = np - rep.kept;
     rep.removed_patches = patches.iter().filter(|l| l.iter().all(|&f| !keep[f as usize])).count();
@@ -991,6 +1003,70 @@ fn arrange(mesh: &mut Mesh) -> ArrangeReport {
     }
     dbg_time("arrange done", t0);
     rep
+}
+
+/// T12b: kept pieces that fold onto a kept neighbor at an edge, with the
+/// winding number of the input on both own sides (at `side_eps` along the
+/// normal of the source face) above 0.5 ("in"), or on the same side of 0.5
+/// ("same"). These pieces are set to "not kept". Returns their number.
+#[allow(clippy::too_many_arguments)]
+fn remove_inner_fold_pieces(
+    mode: &str,
+    edges: &[(EdgeKey, Vec<u32>)],
+    tris: &[[u32; 3]],
+    v: &[Vec3],
+    src: &[u32],
+    src_unit: &[Option<Vec3>],
+    fwn: &Fwn,
+    side_eps: f64,
+    flip: &[bool],
+    keep: &mut [bool],
+) -> usize {
+    let unit = |f: usize| {
+        let t = tris[f];
+        let n = cross(sub(v[t[1] as usize], v[t[0] as usize]), sub(v[t[2] as usize], v[t[0] as usize]));
+        let l = norm(n);
+        let n = if l > 0.0 { scale(n, 1.0 / l) } else { [0.0; 3] };
+        if flip[f] { scale(n, -1.0) } else { n }
+    };
+    let mut folded: Vec<u32> = Vec::new();
+    for (_k, ord) in edges {
+        let ks: Vec<u32> = ord.iter().copied().filter(|&f| keep[f as usize]).collect();
+        for i in 0..ks.len() {
+            for j in i + 1..ks.len() {
+                if dot(unit(ks[i] as usize), unit(ks[j] as usize)) < -0.985 {
+                    folded.push(ks[i]);
+                    folded.push(ks[j]);
+                }
+            }
+        }
+    }
+    folded.sort_unstable();
+    folded.dedup();
+    let verdict: Vec<bool> = folded
+        .par_iter()
+        .map(|&f| {
+            let t = tris[f as usize];
+            let c = scale(add(add(v[t[0] as usize], v[t[1] as usize]), v[t[2] as usize]), 1.0 / 3.0);
+            let Some(n) = src_unit[src[f as usize] as usize] else {
+                return false;
+            };
+            let wf = fwn.eval(add(c, scale(n, side_eps)), None);
+            let wb = fwn.eval(sub(c, scale(n, side_eps)), None);
+            match mode {
+                "same" => (wf > 0.5) == (wb > 0.5),
+                _ => wf > 0.5 && wb > 0.5,
+            }
+        })
+        .collect();
+    let mut gone = 0;
+    for (&f, &go) in folded.iter().zip(&verdict) {
+        if go {
+            keep[f as usize] = false;
+            gone += 1;
+        }
+    }
+    gone
 }
 
 /// After the original positions came back: the vertices of faces that now

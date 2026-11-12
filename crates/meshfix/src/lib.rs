@@ -18,6 +18,7 @@ pub mod arrange;
 pub mod check;
 pub mod decimate;
 pub mod delaunay;
+pub mod folds;
 pub mod math;
 pub mod mesh;
 pub mod planar;
@@ -367,7 +368,14 @@ pub fn run_stage(stage: Stage, m: &mut Mesh, o: &RepairOptions) -> usize {
         }
         Stage::FixDegenerateFaces => stages::fix_degenerate_faces(m, o.degenerate_tolerance),
         Stage::RemoveTinyShells => stages::remove_tiny_shells(m, o.tiny_shell_volume),
-        Stage::SplitTJunctions => stages::split_t_junctions(m, o.export_tolerance),
+        Stage::SplitTJunctions => {
+            let n = stages::split_t_junctions(m, o.export_tolerance);
+            // T12b (test only): vertices inside straight fold lines go.
+            match std::env::var("MESHFIX_FOLD_VERTS").ok().and_then(|s| s.parse::<f64>().ok()) {
+                Some(tol) => n + folds::remove_fold_line_vertices(m, tol),
+                None => n,
+            }
+        }
         // The fallbacks are not single steps: see `repair`.
         Stage::AlphaWrap | Stage::VolumeRebuild | Stage::StlSafeOutput => 0,
     }

@@ -128,6 +128,39 @@ keep it as a changelog.
       stays 0.2.0 until a release of 0.3.0 (the owner decides).
     - Merged into main after the CI; no tag.
 
+16. Branch wip/t12b-folded2 (T12b, folded faces on delta; not merged,
+    the owner decides). All new code is behind options that are off by
+    default (the environment variables below).
+    - Measured first (copy of delta, bench of OpenFOAM Studio): the input
+      has 6 811 folded faces, the result 15 855, the Windows repair 13 931
+      (13 905 in the earlier measurement). Almost all of the difference is
+      at x 2400-2500 mm (engine): result 13 643, Windows 10 970. The fold
+      lines there are knife edges of thin blades and thin cracks; the cut
+      curves of the union put many short edges (median 0.1 mm) on them.
+    - A1, MESHFIX_FOLD_PIECES=in (arrange.rs): folded kept pieces with the
+      input inside on both own sides go. delta 13 447 folded, but 260
+      crossing faces and 18.5 mm result to input (large fills at
+      x 2420 mm); plane7 178 crossing faces. Not usable.
+    - A2, MESHFIX_FOLD_CLOSE=<tol> (folds.rs, close_inner_folds): groups of
+      folded faces with the input inside in the wedge go, the hole gets a
+      checked fill (distance, no new fold, no crossing). Clean, but only
+      15 778 (most fills fold again: the two lips are at different
+      heights) and 50 s slower. Not usable.
+    - B, MESHFIX_FOLD_VERTS=<angle in rad> (folds.rs,
+      remove_fold_line_vertices, at the end of split_t_junctions): a
+      vertex inside a straight fold line goes when each face at it lies in
+      the plane of one of the two walls. Only the triangulation changes.
+      With 1e-4: delta 13 225 folded, 0 crossing, 0/0/0/0, closed, 1 part,
+      result to input max 0.986 mm (as before), shape change at most
+      0.001 mm (mean 3e-8 mm), split_t_junctions +1.7 s; plane7 6 213
+      folded (was 6 766), 0 crossing, 2 parts, 0.0049 mm, change at most
+      0.0002 mm. 1e-3: delta 11 529, change at most 0.0067 mm. 1e-6:
+      delta 15 124.
+    - Checked with B (1e-4): 58 Rust tests (new: the blade test),
+      tests/test_core.py and tests/test_app.py 0 problems with the option
+      off and on, delta and plane7 after STL (mm, m) and glTF read again
+      0/0/0/0, cases 35/35.
+
 ## Next
 
 1. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section

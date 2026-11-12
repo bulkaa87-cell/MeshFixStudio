@@ -1239,3 +1239,49 @@ fn stl_safe_keeps_a_clean_cube() {
     assert_eq!((r.pairs, r.faces, r.changes()), (0, 0, 0), "{r:?}");
     assert_eq!(m, before);
 }
+/// A closed thin wedge (a blade, 3.4 degrees at the knife edge) with five
+/// vertices on the straight knife edge.
+fn blade() -> Mesh {
+    let mut v: Vec<Vec3> = (0..5).map(|i| [2.5 * i as f64, 0.0, 0.0]).collect();
+    v.push([0.0, 10.0, 0.3]); // 5 top, x = 0
+    v.push([10.0, 10.0, 0.3]); // 6 top, x = 10
+    v.push([0.0, 10.0, -0.3]); // 7 bottom, x = 0
+    v.push([10.0, 10.0, -0.3]); // 8 bottom, x = 10
+    let mut t: Vec<[u32; 3]> = Vec::new();
+    for i in 0..4u32 {
+        t.push([i, 5, i + 1]); // top wall
+        t.push([i, i + 1, 7]); // bottom wall
+    }
+    t.push([4, 5, 6]);
+    t.push([4, 8, 7]);
+    t.push([0, 7, 5]); // end x = 0
+    t.push([4, 6, 8]); // end x = 10
+    t.push([5, 7, 8]); // back y = 10
+    t.push([5, 8, 6]);
+    let mut m = Mesh::new(v, t);
+    fix_orientation(&mut m);
+    if volume(&m) < 0.0 {
+        for t in &mut m.triangles {
+            t.swap(1, 2);
+        }
+    }
+    m
+}
+
+#[test]
+fn fold_line_vertices_go_without_a_change_of_the_shape() {
+    let mut m = blade();
+    assert_eq!(m.defect_edges(), 0);
+    let v0 = volume(&m);
+    let n = crate::folds::remove_fold_line_vertices(&mut m, 1e-6);
+    assert_eq!(n, 3, "the three inner vertices of the knife edge go");
+    assert_eq!(m.defect_edges(), 0);
+    assert_eq!(m.vertices.len(), 6);
+    assert!((volume(&m) - v0).abs() < 1e-9 * v0.abs(), "{} {v0}", volume(&m));
+    // A bent knife edge keeps the vertex at the bend.
+    let mut b = blade();
+    b.vertices[2][2] = 0.01;
+    let n = crate::folds::remove_fold_line_vertices(&mut b, 1e-6);
+    assert!(n < 3, "{n}");
+    assert!(b.vertices.iter().any(|p| (p[2] - 0.01).abs() < 1e-12));
+}
