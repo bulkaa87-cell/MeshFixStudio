@@ -1,7 +1,7 @@
 #!/bin/sh
 # Make the macOS disk image from the PyInstaller bundle.
 #
-#   sh packaging/macos/make_dmg.sh 0.1.0 arm64     (or x86_64)
+#   sh packaging/macos/make_dmg.sh 0.1.1 arm64     (or x86_64)
 #
 # Input: "dist/MeshFix Studio.app". Output:
 # dist/MeshFix-Studio-<version>-macos-<arch>.dmg.
@@ -11,7 +11,7 @@
 # notarized: macOS asks one time at the first start (System Settings >
 # Privacy & Security > Open Anyway, or right click > Open).
 set -eu
-VERSION="${1:-0.1.0}"
+VERSION="${1:-0.1.1}"
 ARCH="${2:-$(uname -m)}"
 APP="dist/MeshFix Studio.app"
 OUT="dist/MeshFix-Studio-${VERSION}-macos-${ARCH}.dmg"

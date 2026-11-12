@@ -36,6 +36,9 @@ keep it as a changelog.
    hdiutil, the «First start» and «Check the download» parts of README.md
    and RELEASE_NOTES.md.
 
+10. Release v0.1.1 (2026-11-12): wip/t33-logos (the logo) and
+    wip/free-signing merged into main, version 0.1.1.
+
 ## Next
 
 1. Port the T31 change of OpenFOAM Studio (STL-safe output) into

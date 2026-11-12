@@ -3,6 +3,21 @@ its problems in 3D, repair it, and export a binary STL.
 
 The program does not need Python.
 
+## What is new in 0.1.1
+
+- The MeshFix Studio logo: the window, the installer, the Start menu, the
+  macOS app and the Linux AppImage use it.
+- macOS: the app has an ad-hoc signature (free, without an Apple account).
+  Thus Apple silicon starts it after one «Open Anyway» step.
+- The release has `SHA256SUMS.txt`, and each installer and wheel has a
+  build provenance attestation (see «Check the download»).
+- The license is now «GPL-3.0-or-later»: the GNU General Public License,
+  version 3 or (at your option) any later version. The text of `LICENSE`
+  is the same.
+- The build of Linux takes its system packages from five mirrors in turn:
+  the Ubuntu mirrors did not answer some build computers.
+- The repair and the 3D view did not change.
+
 ## Download
 
 | System | File |
