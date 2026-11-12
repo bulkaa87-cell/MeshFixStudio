@@ -16,7 +16,7 @@ The native module meshfix._native is the Rust crate crates/meshfix.
 
 from __future__ import annotations
 
-__version__ = "0.1.1"
+__version__ = "0.1.2"
 
 
 def native_version() -> str | None:
