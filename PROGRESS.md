@@ -84,10 +84,18 @@ keep it as a changelog.
       0 problems (start with a file, smoke test 24/12 -> 0/0/0/0, the
       exported file has the same counts).
 
+14. Release v0.2.0 (2026-11-12, Latest): wip/t48-shared on main (a0eb9d6,
+    fast forward), CI green on the four systems (macOS arm64 ran again:
+    first no runner). The Windows installer of the release: SHA256 =
+    SHA256SUMS.txt, attestation found, installed per user, smoke test on
+    the small model (24/12 -> 0/0/0/0) and on a copy of a large aircraft
+    model (23041/98285/4979 -> 0/0/0/0, the exported STL the same),
+    removed again.
+
 ## Next
 
 1. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section
-   5): in work (OpenFOAM Studio branch wip/t48-shared).
+   5): step 1 done with 0.2.0; step 2 later.
 2. Make the program smaller (PLAN.md, section 6).
 3. Test the macOS and Linux files on real computers (CI tests them only
    on the runners, without a real GPU).
