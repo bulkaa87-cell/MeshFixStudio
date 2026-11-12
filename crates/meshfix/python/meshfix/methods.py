@@ -160,7 +160,8 @@ def repair_bodies(key: str, mesh, say=None, stl_safe: bool = True):
     the result of repair_meshes as it is. Call it from a worker thread."""
     from . import formats
     bodies = formats.split_bodies(mesh)
-    outs = repair_meshes(key, [m for _n, m in bodies], say, stl_safe=stl_safe)
+    kw = {} if stl_safe else {"stl_safe": False}      # an old spy has no kw
+    outs = repair_meshes(key, [m for _n, m in bodies], say, **kw)
     if len(outs) != len(bodies):
         return outs[0]
     if len(bodies) == 1 and not bodies[0][0]:
