@@ -58,6 +58,8 @@ SETTINGS_ORG = "MeshFix Studio"
 SETTINGS_APP = "ui"
 DEFAULT_LANGUAGE = "en"
 I18N_DIR = Path(__file__).resolve().with_name("i18n")
+ICON_DIR = Path(__file__).resolve().with_name("icons")
+APP_USER_MODEL_ID = "MeshFixStudio.MeshFixStudio"
 SUFFIXES = (".stl", ".obj", ".ply", ".vtp", ".vtk")
 SOURCE_URL = "https://github.com/bulkaa87-cell/MeshFixStudio"
 HISTORY = 10            # undo steps that the program keeps
@@ -66,6 +68,30 @@ CLOSE_GRACE_MS = 1500   # wait for a running repair at the end, then exit
 # Units of a mesh file: (key, label, metres per unit).
 UNITS = (("mm", "mm", 0.001), ("cm", "cm", 0.01), ("m", "m", 1.0),
          ("in", "in", 0.0254), ("km", "km", 1000.0))
+
+def app_icon() -> QtGui.QIcon:
+    """The logo in each size of meshfix_studio/icons/ (packaging/icons/
+    make_icons.py writes them). An empty icon when the files are missing."""
+    icon = QtGui.QIcon()
+    for path in sorted(ICON_DIR.glob("meshfix-studio-*.png")):
+        icon.addFile(str(path))
+    return icon
+
+
+def own_taskbar_button() -> None:
+    """Windows, a start with python(w).exe: without an own app id, the
+    taskbar shows the button of Python with the icon of Python. The frozen
+    program has the icon in its exe, and the shortcuts of the installer have
+    no app id: there an id would make a second taskbar button."""
+    if sys.platform != "win32" or getattr(sys, "frozen", False):
+        return
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+            APP_USER_MODEL_ID)
+    except (AttributeError, OSError):
+        pass
+
 
 def open_settings() -> QtCore.QSettings:
     """The settings of the program. MESHFIX_SETTINGS_DIR (the tests, a
@@ -133,6 +159,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         fs_i18n.install()
         super().__init__()
         self.setObjectName("MeshFixStudio")
+        self.setWindowIcon(app_icon())
         self.setAcceptDrops(True)
         self.store = open_settings()
 
@@ -979,10 +1006,12 @@ def main(argv=None):
         _stdout_for_child()
         sys.exit(level.probe_main(argv[2:]))
     level.configure(app_name=APP_NAME)
+    own_taskbar_button()
     QtCore.QCoreApplication.setAttribute(QtCore.Qt.AA_ShareOpenGLContexts)
     app = QtWidgets.QApplication(argv)
     app.setStyle("Fusion")
     app.setApplicationName(APP_NAME)
+    app.setWindowIcon(app_icon())
     start_language()
     win = MeshFixWindow()
     win.show()

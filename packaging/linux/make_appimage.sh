@@ -3,7 +3,7 @@
 #
 #   sh packaging/linux/make_appimage.sh 0.1.0
 #
-# Input: "dist/MeshFix Studio/" and packaging/icons/meshfix-studio.png.
+# Input: "dist/MeshFix Studio/" and the icons in packaging/icons/.
 # Output: dist/MeshFix-Studio-<version>-linux-x86_64.AppImage.
 # appimagetool is downloaded once to build/ (it runs without FUSE through
 # APPIMAGE_EXTRACT_AND_RUN). Build on the oldest Linux that you support:
@@ -16,15 +16,21 @@ OUT="dist/MeshFix-Studio-${VERSION}-linux-x86_64.AppImage"
 TOOL="build/appimagetool-x86_64.AppImage"
 test -d "$SRC"
 rm -rf "$APPDIR"
-mkdir -p "$APPDIR/usr/lib" "$APPDIR/usr/share/applications" \
-         "$APPDIR/usr/share/icons/hicolor/256x256/apps"
+mkdir -p "$APPDIR/usr/lib" "$APPDIR/usr/share/applications"
 cp -R "$SRC" "$APPDIR/usr/lib/meshfix-studio"
 cp packaging/linux/AppRun "$APPDIR/AppRun"
 chmod +x "$APPDIR/AppRun"
 cp packaging/linux/meshfix-studio.desktop "$APPDIR/meshfix-studio.desktop"
 cp packaging/linux/meshfix-studio.desktop "$APPDIR/usr/share/applications/"
 cp packaging/icons/meshfix-studio.png "$APPDIR/meshfix-studio.png"
-cp packaging/icons/meshfix-studio.png "$APPDIR/usr/share/icons/hicolor/256x256/apps/"
+for n in 16 24 32 48 64 128 256 512; do
+    dir="$APPDIR/usr/share/icons/hicolor/${n}x${n}/apps"
+    mkdir -p "$dir"
+    cp "packaging/icons/png/meshfix-studio-$n.png" "$dir/meshfix-studio.png"
+done
+mkdir -p "$APPDIR/usr/share/icons/hicolor/scalable/apps"
+cp packaging/icons/meshfix-studio.svg "$APPDIR/usr/share/icons/hicolor/scalable/apps/"
+cp packaging/icons/meshfix-studio.png "$APPDIR/.DirIcon"
 mkdir -p build
 if [ ! -x "$TOOL" ]; then
     curl -fsSL -o "$TOOL" \

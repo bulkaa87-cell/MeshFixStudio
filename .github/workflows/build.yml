@@ -124,9 +124,6 @@ jobs:
       - name: Test the window (off-screen)
         run: python -X utf8 tests/test_app.py
 
-      - name: Icons
-        run: python packaging/icons/make_icons.py
-
       - name: PyInstaller program
         run: python -m PyInstaller --noconfirm --distpath dist --workpath build/pyi packaging/pyinstaller/meshfix_studio.spec
 

@@ -33,4 +33,4 @@ version = { attr = "meshfix_studio.__version__" }
 include = ["meshfix_studio*"]
 
 [tool.setuptools.package-data]
-meshfix_studio = ["i18n/*/*.json"]
+meshfix_studio = ["i18n/*/*.json", "icons/*.png"]
