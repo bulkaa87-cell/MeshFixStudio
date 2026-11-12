@@ -402,7 +402,8 @@ pub fn close_inner_folds(mesh: &mut Mesh, input: &Mesh, tol: f64, w_min: f64) ->
 
 // ---- vertices on straight fold lines -------------------------------------
 
-/// T12b approach B (option MESHFIX_FOLD_VERTS, default off): remove the
+/// T12b approach B (on by default since 0.3.1, RepairOptions::fold_line_angle
+/// = 1e-4; MESHFIX_FOLD_VERTS overrides it, 0 = off): remove the
 /// vertices inside straight fold lines when the shape stays the same.
 ///
 /// A fold line is a chain of edges whose two faces fold onto each other

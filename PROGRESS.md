@@ -160,6 +160,9 @@ keep it as a changelog.
       tests/test_core.py and tests/test_app.py 0 problems with the option
       off and on, delta and plane7 after STL (mm, m) and glTF read again
       0/0/0/0, cases 35/35.
+17. Version 0.3.1 (wip/t12b-folded2): B is on by default
+    (RepairOptions::fold_line_angle = 1e-4; MESHFIX_FOLD_VERTS=0 turns it
+    off). A1 and A2 stay off. The owner selected B (2026-11-12).
 
 ## Next
 

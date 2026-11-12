@@ -232,6 +232,12 @@ pub struct RepairOptions {
     pub volume_cells: Option<usize>,
     /// The last step stl_safe_output (stlsafe.rs). MESHFIX_STL_SAFE=off stops it.
     pub stl_safe: bool,
+    /// At the end of split_t_junctions: the vertices inside straight fold
+    /// lines go (folds.rs, remove_fold_line_vertices) when the faces at
+    /// them stay in their planes within this angle (radians). Fewer folded
+    /// faces, the shape moves by less than the angle times the local edge
+    /// length. 0 = off. MESHFIX_FOLD_VERTS overrides it (tests).
+    pub fold_line_angle: f64,
 }
 
 impl Default for RepairOptions {
@@ -253,6 +259,7 @@ impl Default for RepairOptions {
             method: Method::Pipeline,
             volume_cells: None,
             stl_safe: true,
+            fold_line_angle: 1e-4,
         }
     }
 }
@@ -370,10 +377,12 @@ pub fn run_stage(stage: Stage, m: &mut Mesh, o: &RepairOptions) -> usize {
         Stage::RemoveTinyShells => stages::remove_tiny_shells(m, o.tiny_shell_volume),
         Stage::SplitTJunctions => {
             let n = stages::split_t_junctions(m, o.export_tolerance);
-            // T12b (test only): vertices inside straight fold lines go.
-            match std::env::var("MESHFIX_FOLD_VERTS").ok().and_then(|s| s.parse::<f64>().ok()) {
-                Some(tol) => n + folds::remove_fold_line_vertices(m, tol),
-                None => n,
+            // Vertices inside straight fold lines go (T12b).
+            let tol = std::env::var("MESHFIX_FOLD_VERTS").ok().and_then(|s| s.parse::<f64>().ok()).unwrap_or(o.fold_line_angle);
+            if tol > 0.0 {
+                n + folds::remove_fold_line_vertices(m, tol)
+            } else {
+                n
             }
         }
         // The fallbacks are not single steps: see `repair`.

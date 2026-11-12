@@ -3,6 +3,15 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.3.1
+
+- Fewer folded faces (two neighbor triangles folded onto each other at
+  about 180 degrees). The repair removes the extra vertices on straight
+  fold lines; only the triangles of the two walls change. On a large
+  aircraft model: 15 855 -> 13 225 folded faces, the shape moves by at
+  most 0.001 mm. All counts of the check, the crossing faces and the
+  distance to the input stay the same.
+
 ## What is new in 0.3.0
 
 - Open and export: STL (binary and ASCII), 3MF, OBJ, PLY (binary and
