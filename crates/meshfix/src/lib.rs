@@ -63,7 +63,7 @@ pub enum Stage {
     StlSafe,
 }
 
-/// The order of the 12 steps.
+/// The 12 steps, in the order that `repair` runs them.
 pub const PIPELINE: [Stage; 12] = [
     Stage::Stitch1,
     Stage::CloseTrivialHoles1,

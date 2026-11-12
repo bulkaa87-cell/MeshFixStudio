@@ -39,6 +39,13 @@ keep it as a changelog.
 10. Release v0.1.1 (2026-11-12): wip/t33-logos (the logo) and
     wip/free-signing merged into main, version 0.1.1.
 
+11. Branch wip/stlsafe (v0.1.2, not tagged): the StlSafe step of OpenFOAM
+    Studio (T31), the new wording about the Windows repair (the same as in
+    OpenFOAM Studio), tools/build_wheels.py with --remap-path-prefix (CI
+    uses it). Checked: 56 Rust tests, tests/test_core.py and
+    tests/test_app.py 0 problems; copies of two large aircraft models
+    stay 0/0/0/0 after the export to STL and a read.
+
 ## Next
 
 1. Port the T31 change of OpenFOAM Studio (STL-safe output) into
@@ -52,8 +59,7 @@ keep it as a changelog.
 
     py -3.12 -m venv .venv
     .venv\Scripts\python -m pip install maturin pyinstaller pillow six
-    .venv\Scripts\maturin develop --release -m crates\meshfix\Cargo.toml
-    .venv\Scripts\maturin develop --release -m crates\foamview\Cargo.toml
+    .venv\Scripts\python tools\build_wheels.py --develop
     .venv\Scripts\python tests\test_core.py
     .venv\Scripts\python tests\test_app.py
     .venv\Scripts\pyinstaller --noconfirm --distpath build\dist --workpath build\work packaging\pyinstaller\meshfix_studio.spec

@@ -119,9 +119,8 @@ jobs:
         run: python -m pip install --upgrade pip maturin pyinstaller pillow
 
       - name: Native wheels (meshfix-core, foamview)
-        run: |
-          python -m maturin build --release -m crates/meshfix/Cargo.toml -o wheels
-          python -m maturin build --release -m crates/foamview/Cargo.toml -o wheels
+        # The script adds --remap-path-prefix: no build path in the binaries.
+        run: python tools/build_wheels.py wheels
 
       - name: Install the wheels and the dependencies
         run: |

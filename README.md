@@ -81,8 +81,7 @@ You need Python 3.10 or newer and Rust (stable).
 
     python -m venv .venv
     .venv/bin/python -m pip install maturin pyinstaller pillow six
-    .venv/bin/maturin develop --release -m crates/meshfix/Cargo.toml
-    .venv/bin/maturin develop --release -m crates/foamview/Cargo.toml
+    .venv/bin/python tools/build_wheels.py --develop
     PYTHONPATH=app .venv/bin/python -m meshfix_studio
 
 On Windows, use `.venv\Scripts\` instead of `.venv/bin/`, and
