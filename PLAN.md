@@ -14,7 +14,9 @@ yet.
 2. Each operating system gets an installer that GitHub Actions builds:
    a Windows `.exe` installer, a macOS `.dmg`, a Linux AppImage. The user
    does not need Python.
-3. The license is GPL-3.0 (the `LICENSE` file of this repository).
+3. The license is GPL-3.0 (the `LICENSE` file of this repository). The
+   owner selected «version 3 or later» on 2026-11-12: SPDX
+   `GPL-3.0-or-later` in each package and crate.
 
 ## 2. Repository layout
 

@@ -3,7 +3,7 @@ members = ["crates/meshfix", "crates/foamview"]
 resolver = "2"
 
 [workspace.package]
-license = "GPL-3.0-only"
+license = "GPL-3.0-or-later"
 repository = "https://github.com/bulkaa87-cell/MeshFixStudio"
 
 [profile.release]

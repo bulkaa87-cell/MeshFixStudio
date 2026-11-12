@@ -60,5 +60,6 @@ the person: the tests import `tests/_isolate.py` first.
 
 ## License
 
-Your contribution is under the GNU General Public License version 3, the
-license of this repository.
+Your contribution is under the license of this repository: the GNU
+General Public License, version 3 or (at your option) any later version
+(`GPL-3.0-or-later`).

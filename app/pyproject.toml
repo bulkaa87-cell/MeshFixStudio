@@ -7,8 +7,11 @@ name = "meshfix-studio"
 dynamic = ["version"]
 description = "MeshFix Studio: open a triangle mesh, see its problems in 3D, repair it, export STL"
 readme = "../README.md"
-license = { text = "GPL-3.0-only" }
+license = { text = "GPL-3.0-or-later" }
 requires-python = ">=3.10"
+classifiers = [
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+]
 dependencies = [
     "meshfix-core",
     "foamview",

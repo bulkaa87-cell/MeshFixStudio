@@ -837,7 +837,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
                "Problems in the 3D view: red — holes (open edges), magenta "
                "— flipped faces, yellow — non-manifold edges, green — "
                "degenerate faces.\n\n3D: {level}\nCore: meshfix "
-               "{core}\n\nLicense: GNU GPL version 3. Source code: "
+               "{core}\n\nLicense: GNU GPL version 3 or later. Source code: "
                "{url}", version=__version__, core=CORE_VERSION,
                level=self.lbl_3d.text(), url=SOURCE_URL))
 
