@@ -247,27 +247,27 @@ The installers:
 - Windows: Inno Setup (`packaging/windows/meshfix_studio.iss`). It installs
   for the user only (no administrator) or for all users, makes a Start menu
   entry, and on request a desktop icon and «Open with» for `.stl`, `.obj`,
-  `.ply`. It has an uninstaller. Without a code signature, Windows
+  `.ply`. It has an uninstaller. It has no code signature. Windows
   SmartScreen shows «Windows protected your PC»: the person clicks «More
-  info», then «Run anyway». A signature needs a code signing certificate
-  (an OV certificate, about 200 to 400 EUR per year, or Azure Trusted
-  Signing, or SignPath, which is free for open source projects).
+  info», then «Run anyway». The owner selected free tools without an
+  application (2026-11-12). A code signing certificate without cost and
+  without an application does not exist, thus this warning stays.
 - macOS: the PyInstaller `.app` in a `.dmg` (`packaging/macos/make_dmg.sh`),
   two builds: arm64 (Apple silicon) and x86_64 (Intel). The app has an
-  ad-hoc signature (arm64 needs a signature to start at all). It has no
-  Developer ID signature and no notarization. Then macOS says that it
-  "cannot check the app for malicious software". The person opens it with
-  right click > «Open», or in System Settings > Privacy & Security >
-  «Open Anyway» (macOS 15: only the second way).
-  A signature and notarization need an Apple Developer Program account
-  (99 USD per year) and a «Developer ID Application» certificate. CI then
-  needs four secrets: the certificate (base64), its password, the team ID,
-  and an App Store Connect API key for `notarytool`. The steps are
-  `codesign --options runtime`, `notarytool submit --wait`, `stapler staple`.
+  ad-hoc signature (free; arm64 needs a signature to start at all). It has
+  no Developer ID signature and no notarization (both need a paid Apple
+  Developer Program account). macOS says that it "cannot check the app".
+  The person opens it one time in System Settings > Privacy & Security >
+  «Open Anyway» (on macOS 14 and older also with right click > «Open»).
 - Linux: an AppImage (`packaging/linux/make_appimage.sh`). The person makes
   it executable and starts it. It needs glibc 2.35 or newer (built on Ubuntu
   22.04), and the usual X11 or Wayland libraries of a desktop. A `.deb` or
   a Flatpak can come later.
+- All systems, free: the release has `SHA256SUMS.txt`, and CI makes a
+  build provenance attestation (`actions/attest-build-provenance`) for each
+  installer and wheel. `gh attestation verify <file> --repo
+  bulkaa87-cell/MeshFixStudio` shows that this repository built the file.
+  README.md tells the steps.
 
 ## 10. CI (`.github/workflows/build.yml`)
 

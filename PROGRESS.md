@@ -22,9 +22,17 @@ keep it as a changelog.
    Windows installer 107 MB (installed per user, started, repaired, and
    removed again on Windows 10), macOS arm64 dmg 124 MB, macOS x86_64 dmg
    146 MB, Linux AppImage 235 MB, and the wheels of all four systems. The
-   Linux files come from the build of 5d33e7f (the tag build did not get the
+   Linux files come from the build of b1107b8 (the tag build did not get the
    Linux packages; the program code is the same).
-7. CI: all four rows green on main (5d33e7f).
+7. CI: all four rows green on main (b1107b8).
+
+8. History rewrite (2026-11-12): the identity of the web commit «Initial
+   commit» is now the noreply address. All trees stay the same. The tag
+   v0.1.0 and its release moved to the new commits.
+9. Branch wip/free-signing: build provenance attestations, SHA256SUMS.txt
+   in the release, the ad-hoc macOS signature (it was there), a retry of
+   hdiutil, the «First start» and «Check the download» parts of README.md
+   and RELEASE_NOTES.md.
 
 ## Next
 

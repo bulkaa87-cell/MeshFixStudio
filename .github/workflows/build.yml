@@ -40,6 +40,11 @@ jobs:
   build:
     name: ${{ matrix.name }}
     needs: rust
+    permissions:
+      contents: read
+      # Build provenance attestations (free, no application needed).
+      id-token: write
+      attestations: write
     strategy:
       fail-fast: false
       matrix:
@@ -174,6 +179,17 @@ jobs:
         if: matrix.target == 'linux'
         run: sh packaging/linux/make_appimage.sh "${{ steps.version.outputs.version }}"
 
+      - name: Build provenance attestation (installer and wheels)
+        # A pull request from a fork gets no id-token: skip it there.
+        if: github.event_name != 'pull_request'
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.exe
+            dist/*.dmg
+            dist/*.AppImage
+            wheels/*.whl
+
       - name: Upload the installer
         uses: actions/upload-artifact@v4
         with:
@@ -212,6 +228,7 @@ jobs:
           mkdir -p release
           find artifacts -type f \( -name '*.exe' -o -name '*.dmg' -o -name '*.AppImage' -o -name '*.whl' \) -exec cp {} release/ \;
           ls -l release
+          (cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
           cp RELEASE_NOTES.md notes.md
           missing=""
           ls release/*windows-x64-setup.exe >/dev/null 2>&1 || missing="$missing Windows x64,"
