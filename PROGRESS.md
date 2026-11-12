@@ -80,6 +80,9 @@ keep it as a changelog.
     - OpenFOAM Studio (its branch wip/t48-shared) runs with these wheels:
       its repair tests, the full delta test, gpucheck (11 PASS, also
       lavapipe and llvmpipe) and the frozen program are green.
+    - The PyInstaller build of 0.2.0 on Windows: tests/test_built_app.py
+      0 problems (start with a file, smoke test 24/12 -> 0/0/0/0, the
+      exported file has the same counts).
 
 ## Next
 
