@@ -3,7 +3,7 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
-## What is new in 0.3.0 (not released)
+## What is new in 0.3.0
 
 - Open and export: STL (binary and ASCII), 3MF, OBJ, PLY (binary and
   ASCII), OFF, glTF (.glb, .gltf), VTP and legacy VTK. The export dialog
@@ -24,8 +24,9 @@ The program does not need Python.
   `export_filters()`, `split_bodies()`, `join_bodies()`;
   `repair_meshes(..., stl_safe=False)` and `_native.repair(...,
   stl_safe=False)`. `write_mesh()` stays as in 0.2.0.
+- OpenFOAM Studio uses the file formats of this version too.
 
-## What is new in 0.2.0
+## What was new in 0.2.0
 
 - The repair steps have new names. Each step has an id (ASCII) and a name
   in English and Ukrainian: stitch seams, fill tiny holes, remove
