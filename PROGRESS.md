@@ -92,6 +92,42 @@ keep it as a changelog.
     model (23041/98285/4979 -> 0/0/0/0, the exported STL the same),
     removed again.
 
+15. Branch wip/t50-formats (version 0.3.0, not tagged; the owner decides
+    about the release):
+    - meshfix.formats: open and export STL (binary, ASCII), 3MF, OBJ, PLY
+      (binary, ASCII), OFF, glTF (.glb, .gltf), VTP, legacy VTK. Own
+      readers and writers (numpy and the standard library) for 3MF, OBJ,
+      PLY, OFF, glTF and the ASCII STL; VTK for the binary STL and VTK.
+    - Bodies (the cell array meshfix_body and the names): 3MF objects,
+      OBJ `o`, ASCII STL `solid`, glTF nodes, VTK arrays. The window
+      repairs each body alone and keeps the names.
+    - Units: 3MF is written in mm, glTF in m; the readers give the unit
+      of the file (guess_scale). The other formats: the unit of the input
+      file, and a note in the log.
+    - The step stl_safe_output: the window repairs without it
+      (`repair_meshes(..., stl_safe=False)`, native `stl_safe=False`), and
+      save_mesh applies it to the file coordinates for STL and glTF
+      (float32). glTF needs it: 3 faces of a large aircraft model became
+      degenerate without it.
+    - Checked (Windows): 57 Rust tests; tests/test_core.py and
+      tests/test_app.py 0 problems; copies of two large aircraft models
+      (251 292 and 274 282 triangles): repaired 0/0/0/0, then each format
+      (mm and m) read again 0/0/0/0 with the same triangles
+      (`tests/test_core.py --big FOLDER`). OrcaSlicer (2.5.0-rc) reads the 3MF
+      (two objects, the sizes in mm, manifold); Blender 5.2 reads the
+      glTF (two objects, Z up, m), OBJ, PLY and STL; our reader reads a
+      3MF project that OrcaSlicer wrote (components in other model files,
+      the object names).
+    - meshfix.methods.repair_bodies(): the repair of each body, for both
+      programs.
+    - CI on the branch (workflow_dispatch, 68dcc6e): all four rows green,
+      also tests/test_built_app.py with each export format and a 3MF input
+      in the frozen program.
+    - OpenFOAM Studio (its branch wip/t50-formats) uses the formats when
+      the installed meshfix-core has them (fs_geometry.formats()); its pin
+      stays 0.2.0 until a release of 0.3.0 (the owner decides).
+    - Merged into main after the CI; no tag.
+
 ## Next
 
 1. The switch of OpenFOAM Studio to the pinned packages (PLAN.md, section

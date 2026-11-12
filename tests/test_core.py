@@ -8,8 +8,15 @@
 4. The method list: the Windows method only on Windows.
 5. The languages: English keys, the Ukrainian catalogue of the core.
 6. The step ids (and the old ids of a saved report), the file formats.
+7. Each file format: the repaired test meshes written and read again
+   (the same counts, triangles and size, in mm and in m), two bodies, the
+   units of 3MF and glTF.
+8. Files of other programs: OBJ groups, PLY and OFF variants, ASCII STL
+   names, a 3MF with components in other model files, a glTF node tree.
+9. With --big FOLDER: each *.stl of FOLDER (use copies), repaired, in each
+   format.
 
-    python tests/test_core.py
+    python tests/test_core.py [--big FOLDER]
 """
 
 import _isolate  # noqa: F401  — first: temp settings, sys.path
@@ -255,7 +262,8 @@ def part_steps():
     # The file format tables: the readers and the writers.
     check("readers", set(geo.READERS) >= {".stl", ".obj", ".ply"},
           sorted(geo.READERS))
-    check("writers", set(geo.WRITERS) == {".stl"}, sorted(geo.WRITERS))
+    check("writers: one for each reader", set(geo.WRITERS) == set(geo.READERS),
+          sorted(geo.WRITERS))
     import tempfile
     p, t = mc.cube()
     path = os.path.join(tempfile.mkdtemp(prefix="meshfix_io_"), "cube.stl")
@@ -270,6 +278,317 @@ def part_steps():
         check("no writer: an error", ".xyz" in str(exc), str(exc))
 
 
+def mm_poly(p_mm, t, shift=0.0):
+    """A test mesh in m from points in mm."""
+    return poly(np.asarray(p_mm, float) + shift, t)
+
+
+def rt(d):
+    """The counts of a round trip: the four counts and the triangles."""
+    return (d.open_edges, d.flipped_faces, d.non_manifold_edges,
+            d.degenerate, d.n_triangles)
+
+
+def read_back(path, fmt, unit_m):
+    """The mesh of a written file, in m."""
+    raw = geo.load_surface(path)
+    factor = geo.guess_scale(raw)[0] if fmt.unit else unit_m
+    return raw, geo.apply_scale(raw, factor)
+
+
+def part_formats():
+    print("7. the file formats: write, read again, units, bodies")
+    import tempfile
+    tmp = tempfile.mkdtemp(prefix="meshfix_fmt_")
+    want_keys = ("stl", "stl_ascii", "3mf", "obj", "ply", "ply_ascii", "off",
+                 "glb", "gltf", "vtp", "vtk")
+    check("the export formats", geo.EXPORT_FORMATS == want_keys,
+          geo.EXPORT_FORMATS)
+    check("the readers", set(geo.READERS) == {".stl", ".3mf", ".obj", ".ply",
+                                              ".off", ".glb", ".gltf",
+                                              ".vtp", ".vtk"},
+          sorted(geo.READERS))
+    check("format_for: suffix, filter, other suffix",
+          geo.format_for("a.STL").key == "stl"
+          and geo.format_for("a.stl", "stl_ascii").key == "stl_ascii"
+          and geo.format_for("a.ply", "stl").key == "ply"
+          and geo.format_for("a.3mf").unit == "mm")
+    # 1. Each repaired test mesh in each format, in mm and in m: the same
+    # counts and triangles after the read, the same size. The repair runs
+    # without its stl_safe_output step: save_mesh applies it (STL, glTF).
+    meshes = {}
+    for name, (p, t) in mc.cases().items():
+        if name in EMPTY:
+            continue
+        meshes[name] = methods.repair_meshes("meshfix", [mm_poly(p, t)],
+                                             stl_safe=False)[0]
+    check("repair without stl_safe_output: no such step",
+          all(n != "stl_safe_output" for n, _c, _s in
+              mf.last_report["stages"]) and "stl_safe" not in mf.last_report,
+          [n for n, _c, _s in mf.last_report["stages"]])
+    for key in want_keys:
+        fmt = geo.FORMATS[key]
+        bad = []
+        for name, res in meshes.items():
+            want = rt(geo.diagnose(res))
+            for unit_m in ((0.001, 1.0) if fmt.unit is None else (0.001,)):
+                path = os.path.join(tmp, f"{name}_{unit_m:g}{fmt.suffix}")
+                info = geo.save_mesh(res, path, key, unit_m=unit_m)
+                _raw, got = read_back(path, fmt, unit_m)
+                size = np.ptp(np.asarray(got.points), 0)
+                ref = np.ptp(np.asarray(res.points), 0)
+                if (rt(geo.diagnose(got)) != want
+                        or not np.allclose(size, ref, rtol=1e-6, atol=1e-9)
+                        or (info.stl_safe is not None) != fmt.stl_safe):
+                    bad.append(f"{name} {unit_m:g}: {want} -> "
+                               f"{rt(geo.diagnose(got))}")
+        check(f"{key}: {len(meshes)} repaired meshes, read again: the same "
+              f"counts and size", not bad, "; ".join(bad[:4]))
+    # 2. Two bodies.
+    p, t = mc.cube()
+    two = geo.join_bodies([("Left side", mm_poly(p, t)),
+                           ("Right", mm_poly(p, t, 30.0))])
+    check("join_bodies: names", geo.body_names(two) == ["Left side", "Right"])
+    split = geo.split_bodies(two)
+    check("split_bodies: 2 bodies of 12 triangles",
+          [(n, m.n_cells, m.n_points) for n, m in split]
+          == [("Left side", 12, 8), ("Right", 12, 8)], split)
+    holes = geo.join_bodies([("A", mm_poly(p, np.delete(t, 2, 0))),
+                             ("B", mm_poly(p, np.delete(t, 5, 0), 30.0))])
+    res = methods.repair_bodies("meshfix", holes, stl_safe=False)
+    check("repair_bodies: each body repaired, the names kept",
+          geo.body_names(res) == ["A", "B"]
+          and methods.clean(geo.diagnose(res)) and res.n_cells == 24,
+          (geo.body_names(res), res.n_cells))
+    res = methods.repair_bodies("alphawrap", holes)
+    check("repair_bodies: a wrap method gives one body",
+          geo.body_names(res) == [] and geo.diagnose(res).closed,
+          geo.body_names(res))
+    for key in want_keys:
+        fmt = geo.FORMATS[key]
+        path = os.path.join(tmp, f"two{fmt.suffix}")
+        info = geo.save_mesh(two, path, key, unit_m=0.001)
+        raw, got = read_back(path, fmt, 0.001)
+        names = geo.body_names(raw)
+        if fmt.bodies:
+            want = (["Left_side", "Right"] if key == "stl_ascii"
+                    else ["Left side", "Right"])
+            ok = names == want and not info.merged and info.written == 2
+        else:
+            ok = len(names) <= 1 and info.merged and info.written == 1
+        check(f"{key}: two bodies {'kept' if fmt.bodies else 'merged'}",
+              ok and got.n_cells == 24
+              and np.isclose(np.ptp(got.points[:, 0]), 0.04), (names, info))
+    # 3. Units: 3MF always in mm, glTF in m, the others in unit_m.
+    cube = mm_poly(p, t)
+    for key, unit_m, span, unit in (("3mf", 1.0, 10.0, "mm"),
+                                    ("glb", 0.001, 0.01, "m"),
+                                    ("obj", 0.001, 10.0, "mm"),
+                                    ("obj", 0.0254, 10.0 / 25.4, "in")):
+        path = os.path.join(tmp, f"unit_{key}_{unit}{geo.FORMATS[key].suffix}")
+        info = geo.save_mesh(cube, path, key, unit_m=unit_m)
+        raw = geo.load_surface(path)
+        factor, note = geo.guess_scale(raw)
+        check(f"{key}: written in {unit}", info.unit == unit
+              and np.isclose(np.ptp(raw.points[:, 0]), span), (info.unit,
+                                                               raw.bounds))
+        if geo.FORMATS[key].unit:
+            check(f"{key}: the reader gives the unit",
+                  np.isclose(factor * span, 0.01) and unit in note, note)
+    check("save_note: no unit", "keeps no unit" in geo.save_note(
+        geo.save_mesh(cube, os.path.join(tmp, "n.ply"), unit_m=0.001)))
+    check("save_note: merged bodies", "2 bodies are one body" in geo.save_note(
+        geo.save_mesh(two, os.path.join(tmp, "n.off"), unit_m=0.001)))
+    # write_mesh (the call of 0.2.0): the coordinates as they are.
+    path = os.path.join(tmp, "plain.stl")
+    geo.write_mesh(poly(np.asarray(p, float) * 1000.0, t), path)
+    check("write_mesh: binary STL, coordinates as they are",
+          np.isclose(np.ptp(geo.load_surface(path).points[:, 0]), 10.0))
+    part_foreign(tmp)
+
+
+def _write(path, text, mode="w"):
+    with open(path, mode, **({} if "b" in mode else {"newline": "\n"})) as f:
+        f.write(text)
+    return path
+
+
+def part_foreign(tmp):
+    print("8. files of other programs")
+    import json
+    import struct
+    import zipfile
+    p, t = mc.cube()
+    cube = poly(p, t)
+    # OBJ: g groups (no o), a quad, negative indices, v/vt/vn.
+    path = _write(os.path.join(tmp, "groups.obj"), "\n".join([
+        "# test", "v 0 0 0", "v 1 0 0", "v 1 1 0", "v 0 1 0", "vt 0 0",
+        "vn 0 0 1", "g first", "f 1/1/1 2/1/1 3/1/1 4/1/1", "g second",
+        "v 0 0 1", "v 1 0 1", "v 0 1 1", "f -3 -2 -1", ""]))
+    m = geo.load_surface(path)
+    check("OBJ: g groups, quad, negative indices",
+          m.n_cells == 3 and geo.body_names(m) == ["first", "second"],
+          (m.n_cells, geo.body_names(m)))
+    path = _write(os.path.join(tmp, "objects.obj"), "\n".join([
+        "o Part A", "v 0 0 0", "v 1 0 0", "v 0 1 0", "g mat", "f 1 2 3",
+        "o Part B", "v 0 0 1", "v 1 0 1", "v 0 1 1", "g mat", "f 4 5 6", ""]))
+    m = geo.load_surface(path)
+    check("OBJ: o objects win over g", geo.body_names(m) == ["Part A", "Part B"],
+          geo.body_names(m))
+    # PLY of VTK (float32, binary and ASCII), a PLY with a quad and other
+    # elements.
+    for binary in (True, False):
+        path = os.path.join(tmp, f"vtk_{binary}.ply")
+        cube.save(path, binary=binary)
+        m = geo.load_surface(path)
+        check(f"PLY of VTK (binary {binary})", m.n_cells == 12
+              and geo.diagnose(m).closed, m.n_cells)
+    path = _write(os.path.join(tmp, "quad.ply"), "\n".join([
+        "ply", "format ascii 1.0", "comment test", "element vertex 4",
+        "property float x", "property float y", "property float z",
+        "property uchar red", "element face 1",
+        "property list uchar int vertex_indices", "element edge 1",
+        "property int vertex1", "property int vertex2", "end_header",
+        "0 0 0 255", "1 0 0 255", "1 1 0 255", "0 1 0 255", "4 0 1 2 3",
+        "0 1", ""]))
+    m = geo.load_surface(path)
+    check("PLY ASCII: a quad, colour, an edge element", m.n_cells == 2,
+          m.n_cells)
+    # OFF: the counts on the first line, comments, face colours.
+    path = _write(os.path.join(tmp, "c.off"), "\n".join(
+        ["OFF 4 2 0", "# comment", "0 0 0", "1 0 0", "1 1 0", "0 1 0",
+         "3 0 1 2 255 0 0", "3 0 2 3", ""]))
+    m = geo.load_surface(path)
+    check("OFF: counts on line 1, comments, colours", m.n_cells == 2
+          and m.n_points == 4, (m.n_cells, m.n_points))
+    # ASCII STL with names, and a binary STL whose header starts with
+    # "solid".
+    geo.save_mesh(geo.join_bodies([("wing", cube), ("fin", poly(p + 20, t))]),
+                  os.path.join(tmp, "named.stl"), "stl_ascii")
+    m = geo.load_surface(os.path.join(tmp, "named.stl"))
+    check("ASCII STL: solid names", geo.body_names(m) == ["wing", "fin"]
+          and m.n_cells == 24, geo.body_names(m))
+    path = os.path.join(tmp, "solid_head.stl")
+    geo.save_mesh(cube, path, "stl")
+    with open(path, "r+b") as f:
+        f.write(b"solid head of a binary file")
+    m = geo.load_surface(path)
+    check("binary STL with 'solid' in the header", m.n_cells == 12
+          and m.n_points == 8, (m.n_cells, m.n_points))
+    # 3MF as Bambu Studio / OrcaSlicer write it: the mesh in another model
+    # file (p:path), a component and a build transform, the name in
+    # Metadata/model_settings.config, unit inch.
+    ns = 'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"'
+    pns = 'xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"'
+    verts = "".join(f'<vertex x="{a}" y="{b}" z="{c}"/>' for a, b, c in p)
+    tris = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in t)
+    sub = (f'<model unit="inch" {ns}><resources><object id="1" type="model">'
+           f'<mesh><vertices>{verts}</vertices><triangles>{tris}</triangles>'
+           '</mesh></object></resources><build/></model>')
+    top = (f'<model unit="inch" {ns} {pns}><resources><object id="2" '
+           'type="model"><components><component p:path="/3D/Objects/'
+           'object_1.model" objectid="1" transform="1 0 0 0 1 0 0 0 1 5 0 0"'
+           '/></components></object></resources><build><item objectid="2" '
+           'transform="1 0 0 0 1 0 0 0 1 0 0 2"/></build></model>')
+    cfg = ('<?xml version="1.0"?><config><object id="2"><metadata key="name"'
+           ' value="Bambu part"/></object></config>')
+    rels = ('<Relationships xmlns="http://schemas.openxmlformats.org/package/'
+            '2006/relationships"><Relationship Target="/3D/3dmodel.model" '
+            'Id="rel-1" Type="http://schemas.microsoft.com/3dmanufacturing/'
+            '2013/01/3dmodel"/></Relationships>')
+    path = os.path.join(tmp, "bambu.3mf")
+    with zipfile.ZipFile(path, "w") as z:
+        z.writestr("_rels/.rels", rels)
+        z.writestr("3D/3dmodel.model", top)
+        z.writestr("3D/Objects/object_1.model", sub)
+        z.writestr("Metadata/model_settings.config", cfg)
+    m = geo.load_surface(path)
+    factor, _note = geo.guess_scale(m)
+    b = m.bounds
+    check("3MF: p:path, transforms, Bambu name, inch",
+          m.n_cells == 12 and geo.body_names(m) == ["Bambu part"]
+          and np.isclose(factor, 0.0254) and np.isclose(b[0], 5.0)
+          and np.isclose(b[4], 2.0), (geo.body_names(m), factor, b))
+    # glTF with a separate .bin, an interleaved buffer (byteStride), a node
+    # tree with translation, rotation and scale.
+    pts = np.asarray(p, np.float32)
+    inter = np.zeros((len(pts), 4), np.float32)
+    inter[:, :3] = pts
+    idx = np.asarray(t, np.uint16).ravel()
+    blob = inter.tobytes() + idx.tobytes()
+    _write(os.path.join(tmp, "tree.bin"), blob, "wb")
+    q = [0.0, 0.0, np.sin(np.pi / 4), np.cos(np.pi / 4)]  # 90 deg about Z
+    doc = {"asset": {"version": "2.0"}, "scene": 0,
+           "scenes": [{"nodes": [0]}],
+           "nodes": [{"name": "root", "translation": [1, 0, 0],
+                      "children": [1]},
+                     {"name": "child", "mesh": 0, "rotation": q,
+                      "scale": [2, 2, 2]}],
+           "meshes": [{"name": "m", "primitives": [
+               {"attributes": {"POSITION": 0}, "indices": 1}]}],
+           "accessors": [{"bufferView": 0, "componentType": 5126,
+                          "count": len(pts), "type": "VEC3"},
+                         {"bufferView": 1, "componentType": 5123,
+                          "count": idx.size, "type": "SCALAR"}],
+           "bufferViews": [{"buffer": 0, "byteOffset": 0,
+                            "byteLength": inter.nbytes, "byteStride": 16},
+                           {"buffer": 0, "byteOffset": inter.nbytes,
+                            "byteLength": idx.nbytes}],
+           "buffers": [{"uri": "tree.bin", "byteLength": len(blob)}]}
+    path = _write(os.path.join(tmp, "tree.gltf"), json.dumps(doc))
+    m = geo.load_surface(path)
+    b = np.round(m.bounds, 6)
+    # glTF (Y up) -> model (Z up): (x, y, z) -> (x, -z, y). The cube 0..10
+    # turned 90 deg about the glTF Y... about Z, scaled 2, moved 1 in x.
+    check("glTF: .bin, byteStride, node tree, TRS",
+          m.n_cells == 12 and geo.body_names(m) == ["child"]
+          and geo.diagnose(m).closed and np.allclose(
+              b, [-19, 1, -20, 0, 0, 20]), (geo.body_names(m), b.tolist()))
+    doc["extensionsRequired"] = ["KHR_draco_mesh_compression"]
+    path = _write(os.path.join(tmp, "draco.gltf"), json.dumps(doc))
+    try:
+        geo.load_surface(path)
+        check("glTF: a required extension gives an error", False)
+    except ValueError as exc:
+        check("glTF: a required extension gives an error",
+              "KHR_draco" in str(exc), str(exc))
+    # GLB header.
+    path = os.path.join(tmp, "c.glb")
+    geo.save_mesh(cube, path)
+    with open(path, "rb") as f:
+        magic, version, length = struct.unpack("<III", f.read(12))
+    check("GLB: header", magic == 0x46546C67 and version == 2
+          and length == os.path.getsize(path))
+
+
+def part_big(folder):
+    """The large models (copies) in `folder`: repair, then each format."""
+    print("9. large models: repair, each format, read again")
+    import glob
+    import tempfile
+    import time
+    tmp = tempfile.mkdtemp(prefix="meshfix_big_")
+    for src in sorted(glob.glob(os.path.join(folder, "*.stl"))):
+        raw = geo.load_surface(src)
+        factor, _note = geo.guess_scale(raw)
+        t0 = time.perf_counter()
+        res = methods.repair_meshes("meshfix", [geo.apply_scale(raw, factor)],
+                                    stl_safe=False)[0]
+        want = rt(geo.diagnose(res))
+        name = os.path.basename(src)
+        check(f"{name}: repaired 0/0/0/0 ({time.perf_counter() - t0:.0f} s)",
+              want[:4] == (0, 0, 0, 0), want)
+        for key in geo.EXPORT_FORMATS:
+            fmt = geo.FORMATS[key]
+            for unit_m in ((0.001, 1.0) if fmt.unit is None else (0.001,)):
+                path = os.path.join(tmp, f"big_{unit_m:g}{fmt.suffix}")
+                geo.save_mesh(res, path, key, unit_m=unit_m)
+                _r, got = read_back(path, fmt, unit_m)
+                check(f"{name}: {key} in {geo.unit_name(unit_m)}",
+                      rt(geo.diagnose(got)) == want, rt(geo.diagnose(got)))
+                os.remove(path)
+
+
 def main():
     try:
         part_native()
@@ -278,6 +597,9 @@ def main():
         part_methods()
         part_language()
         part_steps()
+        part_formats()
+        if "--big" in sys.argv:
+            part_big(sys.argv[sys.argv.index("--big") + 1])
     except Exception:                                     # noqa: BLE001
         import traceback
         traceback.print_exc()

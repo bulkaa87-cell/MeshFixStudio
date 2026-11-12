@@ -13,6 +13,8 @@ Run it after each build, before somebody else starts the program:
    a missing module) is a FAIL with the text of the error dialog.
 2. «--smoke-test IN OUT»: open, repair with meshfix, export, read the file
    again (the result is OUT.json). Exit code 0 and "ok": true.
+3. The same for each other export format (3MF, OBJ, PLY, OFF, glTF, VTK),
+   and a 3MF as the input.
 
 On Linux and macOS without a screen, set QT_QPA_PLATFORM=offscreen: part 1
 then only checks that the process lives and ends when it is stopped.
@@ -130,9 +132,10 @@ def part_start_other(exe: str, src: str, env: dict) -> None:
             proc.kill()
 
 
-def part_smoke(exe: str, src: str, tmp: str, env: dict) -> None:
-    print("2. --smoke-test: open, repair, export, read again")
-    out = os.path.join(tmp, "repaired.stl")
+def part_smoke(exe: str, src: str, tmp: str, env: dict,
+               name: str = "repaired.stl", head: str | None = None) -> bool:
+    print(head or "2. --smoke-test: open, repair, export, read again")
+    out = os.path.join(tmp, name)
     try:
         rc = subprocess.run([exe, "--smoke-test", src, out], env=env,
                             timeout=600).returncode
@@ -145,9 +148,23 @@ def part_smoke(exe: str, src: str, tmp: str, env: dict) -> None:
     print(f"      3D: {res.get('level')}", flush=True)
     print(f"      before {res.get('before')} after {res.get('after')}",
           flush=True)
-    check("exit code 0", rc == 0, rc)
-    check("repaired, closed, the file has the same counts",
+    check(f"{name}: exit code 0", rc == 0, rc)
+    check(f"{name}: repaired, closed, the file has the same counts",
           res.get("ok") is True, res)
+    return rc == 0 and res.get("ok") is True
+
+
+def part_formats(exe: str, src: str, tmp: str, env: dict) -> None:
+    """The export formats in the frozen program (the readers and writers of
+    meshfix.formats need modules of the standard library: zipfile, xml,
+    json, base64), and a 3MF as the input."""
+    print("3. --smoke-test with the other export formats")
+    for suffix in (".3mf", ".obj", ".ply", ".off", ".glb", ".gltf", ".vtp",
+                   ".vtk"):
+        part_smoke(exe, src, tmp, env, "repaired" + suffix, f"   {suffix}")
+    three = os.path.join(tmp, "repaired.3mf")
+    if os.path.isfile(three):
+        part_smoke(exe, three, tmp, env, "from_3mf.stl", "   3MF input")
 
 
 def main() -> int:
@@ -175,6 +192,7 @@ def main() -> int:
         else:
             part_start_other(exe, copy, env)
         part_smoke(exe, copy, tmp, env)
+        part_formats(exe, copy, tmp, env)
     finally:
         cache = env["FS_3D_CACHE"]
         if os.path.isfile(cache):

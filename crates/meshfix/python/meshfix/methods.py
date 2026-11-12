@@ -15,6 +15,9 @@ What is here:
   from all models together).
 - repair_meshes(key, meshes, say): the repair. Call it from a worker thread,
   never from the thread of the window.
+- repair_bodies(key, mesh, say): the repair of each body of one mesh (the
+  bodies of a 3MF, OBJ, ASCII STL or glTF file, meshfix.formats), with the
+  names of the bodies.
 - counts(diagnosis), COUNTS: the four counts of the program check that a
   repair must make zero.
 - summary(key): the text "what the last repair did" (meshfix methods).
@@ -111,7 +114,8 @@ def _merge(meshes):
     return meshes[0].merge(list(meshes[1:]), merge_points=False)
 
 
-def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
+def repair_meshes(key: str, meshes, say=None, merged=None,
+                  stl_safe: bool = True) -> list:
     """Repaired copies of `meshes` (pyvista PolyData in m).
 
     mode(key) == "parts": one result for each input mesh, in the same order.
@@ -120,6 +124,10 @@ def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
 
     `say(text)` receives the progress texts. A text that ends with
     fs_meshfix.VERDICT tells what the repair did (a window keeps it).
+    stl_safe=False: the meshfix methods do not run their last step
+    stl_safe_output. A program that writes the result with
+    meshfix.check.save_mesh gives False: save_mesh applies the step only
+    at an export to STL (the other formats keep the points as they are).
     Raises RuntimeError when the method failed or is not available.
     Call it from a worker thread: a repair can take minutes.
     """
@@ -129,7 +137,7 @@ def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
     meshes = list(meshes)
     if mode(key) == "wrap":
         whole = merged if merged is not None else _merge(meshes)
-        return [fs_meshfix.repair(whole, say, method=key)]
+        return [fs_meshfix.repair(whole, say, method=key, stl_safe=stl_safe)]
     out = []
     for i, mesh in enumerate(meshes, 1):
         head = (tr("model {i} of {n_meshes}: ", i=i, n_meshes=len(meshes))
@@ -140,8 +148,26 @@ def repair_meshes(key: str, meshes, say=None, merged=None) -> list:
         if key == "winfix":
             out.append(fs_winfix.repair(mesh, tell))
         else:
-            out.append(fs_meshfix.repair(mesh, tell, method=key))
+            out.append(fs_meshfix.repair(mesh, tell, method=key,
+                                          stl_safe=stl_safe))
     return out
+
+
+def repair_bodies(key: str, mesh, say=None, stl_safe: bool = True):
+    """Repair each body of `mesh` alone (repair_meshes) and keep the body
+    names (meshfix.formats.BODY). A method of mode "wrap" makes one shell
+    of all bodies: then the result is one body. A mesh without bodies gives
+    the result of repair_meshes as it is. Call it from a worker thread."""
+    from . import formats
+    bodies = formats.split_bodies(mesh)
+    kw = {} if stl_safe else {"stl_safe": False}      # an old spy has no kw
+    outs = repair_meshes(key, [m for _n, m in bodies], say, **kw)
+    if len(outs) != len(bodies):
+        return outs[0]
+    if len(bodies) == 1 and not bodies[0][0]:
+        return outs[0]
+    return formats.join_bodies([(name, out) for (name, _m), out
+                                in zip(bodies, outs)])
 
 
 def counts(diagnosis) -> dict:

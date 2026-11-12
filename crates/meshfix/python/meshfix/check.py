@@ -157,7 +157,7 @@ def drop_stray_cells(mesh: pv.PolyData) -> pv.PolyData:
 
 
 def load_surface(path: str) -> pv.PolyData:
-    """Читає STL/OBJ/PLY/VTP і повертає трикутну поверхню.
+    """Читає файл сітки (формати meshfix.formats) і повертає трикутну поверхню.
 
     Файл без жодного трикутника відкидаємо ТУТ, а не десь далі. Перевірка
     «немає комірок» його не ловить: у хмари точок і в каркаса комірки є, і
@@ -168,7 +168,12 @@ def load_surface(path: str) -> pv.PolyData:
     mesh = reader(path)
     if not isinstance(mesh, pv.PolyData):
         mesh = mesh.extract_surface(algorithm="dataset_surface")
+    keep = {k: mesh.field_data[k] for k in (BODY_NAMES, UNIT)
+            if k in mesh.field_data}
     mesh = drop_stray_cells(mesh.triangulate())
+    for k, value in keep.items():
+        if k not in mesh.field_data:
+            mesh.field_data[k] = value
     if int(mesh.GetNumberOfPolys()) == 0:
         raise ValueError(
             tr("The file has no triangles: {n_points} points, {n_lines} "
@@ -185,6 +190,11 @@ def guess_scale(mesh: pv.PolyData) -> tuple[float, str]:
     Повертає (множник, пояснення). Евристика проста: типова деталь у метрах
     має габарит 0.01..30, у міліметрах — сотні й тисячі.
     """
+    if UNIT in mesh.field_data:          # 3MF, glTF: the file has a unit
+        unit_m = float(np.asarray(mesh.field_data[UNIT]).ravel()[0])
+        if unit_m > 0:
+            return (unit_m, tr("the file gives the unit: {unit}",
+                               unit=unit_name(unit_m)))
     b = mesh.bounds
     span = max(b[1] - b[0], b[3] - b[2], b[5] - b[4])
     if span > 300:
@@ -859,29 +869,176 @@ def write_stl(mesh: pv.PolyData, path: str, binary: bool = True) -> None:
 # FILE FORMATS. One table for reading and one for writing: the suffix of the
 # file (lower case, with the dot) -> the function. A reader takes the path
 # and gives a pyvista data set (load_surface makes the triangle surface of
-# it). A writer takes (mesh, path). A new format is one entry in each table
-# that it supports; the open dialog takes its file types from READERS.
+# it). A writer takes (mesh, path). A new format is one entry in
+# meshfix.formats.FORMATS; the open dialog takes its file types from
+# READERS, the export dialog from export_filters().
+from . import formats as _fmt
+from .formats import (BODY, BODY_NAMES, FORMATS, UNIT, Format, body_count,  # noqa: F401
+                      body_names, join_bodies, split_bodies)
+
+
 def _read_vtk(path):
     return pv.read(str(path))
 
 
-def _write_stl_binary(mesh, path) -> None:
-    write_stl(mesh, str(path), binary=True)
+READERS = {f.suffix: f.read for f in FORMATS.values()}
+WRITERS = {suffix: (lambda mesh, path, _k=key: write_mesh(mesh, path, _k))
+           for suffix, key in _fmt.DEFAULT_FOR_SUFFIX.items()}
+# The export formats in the order of the dialog.
+EXPORT_FORMATS = tuple(FORMATS)
 
 
-READERS = {suffix: _read_vtk
-           for suffix in (".stl", ".obj", ".ply", ".vtp", ".vtk")}
-WRITERS = {".stl": _write_stl_binary}
-
-
-def write_mesh(mesh: pv.PolyData, path) -> None:
-    """Write `mesh` with the writer of the suffix of `path` (WRITERS)."""
+def format_for(path, preferred: str | None = None) -> Format:
+    """The format of a file name. `preferred` (a key of FORMATS, the filter
+    of the dialog) wins when it has the suffix of the name; else the
+    default format of the suffix. ValueError when no format has the
+    suffix."""
     suffix = os.path.splitext(str(path))[1].lower()
-    if suffix not in WRITERS:
-        raise ValueError(tr("No writer for the file type {suffix}.",
-                            suffix=suffix or "?"))
-    WRITERS[suffix](mesh, path)
+    if preferred in FORMATS and FORMATS[preferred].suffix == suffix:
+        return FORMATS[preferred]
+    if suffix in _fmt.DEFAULT_FOR_SUFFIX:
+        return FORMATS[_fmt.DEFAULT_FOR_SUFFIX[suffix]]
+    raise ValueError(tr("No writer for the file type {suffix}.",
+                        suffix=suffix or "?"))
 
+
+def format_label(fmt) -> str:
+    """The name of a format in the language of the interface."""
+    fmt = FORMATS[fmt] if isinstance(fmt, str) else fmt
+    return tr(fmt.label)
+
+
+def export_filters(n_bodies: int = 1) -> list:
+    """[(key, filter text)] for a save dialog. With two or more bodies the
+    text says if the format keeps them or merges them."""
+    out = []
+    for key in EXPORT_FORMATS:
+        fmt = FORMATS[key]
+        label = tr(fmt.label)
+        if n_bodies > 1:
+            label = label + ", " + (tr("bodies as objects") if fmt.bodies
+                                    else tr("bodies merged"))
+        out.append((key, label + f" (*{fmt.suffix})"))
+    return out
+
+
+def open_filter() -> str:
+    """The filter text of an open dialog: all readable mesh files."""
+    return tr("Meshes ({patterns});;All files (*)",
+              patterns=" ".join("*" + s for s in READERS))
+
+
+UNIT_NAMES = {1e-6: "µm", 1e-3: "mm", 1e-2: "cm", 0.0254: "in",
+              0.3048: "ft", 1.0: "m", 1000.0: "km"}
+
+
+def unit_name(unit_m: float) -> str:
+    """'mm', 'm'… for metres per unit; else '× k m'."""
+    for k, name in UNIT_NAMES.items():
+        if abs(k - unit_m) <= 1e-12 * max(k, 1.0):
+            return name
+    return f"× {unit_m:g} m"
+
+
+@dataclass
+class SaveInfo:
+    """What save_mesh wrote."""
+    path: str
+    fmt: Format
+    unit: str                    # the unit of the numbers in the file
+    unit_in_file: bool           # the file says its unit (3MF, glTF)
+    bodies: int                  # bodies of the mesh
+    written: int                 # bodies (objects) in the file
+    stl_safe: dict | None = None  # the counts of the step (STL, glTF)
+
+    @property
+    def merged(self) -> bool:
+        return self.bodies > 1 and self.written < self.bodies
+
+
+def save_mesh(mesh: pv.PolyData, path, fmt=None, *, unit_m: float = 1.0,
+              stl_safe: bool = True) -> SaveInfo:
+    """Write `mesh` (in metres) to `path` in the format `fmt` (a key of
+    FORMATS or a Format; None = the default of the suffix).
+
+    unit_m: metres per unit of the file for the formats without a unit
+    (STL, OBJ, PLY, OFF, VTK). 3MF is always in mm, glTF in m.
+    stl_safe: apply the step stl_safe_output to the file coordinates before
+    an STL or a glTF file is written (float32 coordinates; STL also joins
+    equal points). The other formats do not need it and keep the points
+    as they are.
+    A format without bodies gets all bodies as one.
+    """
+    fmt = (FORMATS[fmt] if isinstance(fmt, str)
+           else fmt or format_for(path))
+    path = str(path)
+    stem = os.path.splitext(os.path.basename(path))[0] or "mesh"
+    if fmt.unit == "mm":
+        k, unit = 1000.0, "mm"
+    elif fmt.unit == "m":
+        k, unit = 1.0, "m"
+    else:
+        k, unit = 1.0 / unit_m, unit_name(unit_m)
+    parts = _fmt._parts_of(mesh, stem)
+    n = len(parts)
+    for p in parts:
+        p.points = p.points * k
+    if not fmt.bodies and n > 1:
+        parts = [_fmt._merged(parts, stem)]
+    report = None
+    if fmt.stl_safe and stl_safe:
+        report = _stl_safe(parts)
+    fmt.write(path, parts, unit)
+    return SaveInfo(path, fmt, unit, fmt.unit is not None, n, len(parts),
+                    report)
+
+
+def _stl_safe(parts: list) -> dict | None:
+    """The step stl_safe_output on each body (in place). None without the
+    native module."""
+    try:
+        from . import _native as rs
+    except ImportError:
+        return None
+    if not hasattr(rs, "stl_safe"):
+        return None
+    total: dict = {}
+    for p in parts:
+        if not len(p.tris):
+            continue
+        q, t, rep = rs.stl_safe(np.ascontiguousarray(p.points, np.float64),
+                                np.ascontiguousarray(p.tris, np.int64))
+        p.points, p.tris = np.asarray(q), np.asarray(t, np.int64)
+        for key, value in rep.items():
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                total[key] = total.get(key, 0) + value
+    return total
+
+
+def write_mesh(mesh: pv.PolyData, path, fmt=None) -> None:
+    """Write `mesh` with the format of the suffix of `path` (or `fmt`). The
+    formats without a unit get the coordinates as they are; 3MF and glTF
+    take the mesh in metres. No stl_safe_output step (save_mesh has it)."""
+    save_mesh(mesh, path, fmt, unit_m=1.0, stl_safe=False)
+
+
+def save_note(info: SaveInfo) -> str:
+    """One line for the log about the unit and the bodies of a written
+    file."""
+    if info.unit_in_file:
+        text = tr("{format} keeps the unit: the file is in {unit}.",
+                  format=tr(info.fmt.label), unit=info.unit)
+    else:
+        text = tr("{format} keeps no unit: the numbers are in {unit}.",
+                  format=tr(info.fmt.label), unit=info.unit)
+    if info.merged:
+        text = text + " " + tr("{format} keeps no bodies: {n} bodies are one "
+                               "body in the file.", format=tr(info.fmt.label),
+                               n=info.bodies)
+    elif info.bodies > 1:
+        text = text + " " + tr("{n} bodies are {n} objects in the file.",
+                               n=info.bodies)
+    return text
 
 
 def problem_layers(mesh, d) -> dict:

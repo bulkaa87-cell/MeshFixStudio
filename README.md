@@ -2,9 +2,9 @@
 
 # MeshFix Studio
 
-MeshFix Studio repairs triangle meshes: STL, OBJ and PLY files from CAD,
-3D scans and 3D printing. Open a mesh, see its problems in 3D, repair it,
-and export a binary STL.
+MeshFix Studio repairs triangle meshes: STL, 3MF, OBJ, PLY, OFF, glTF and
+VTK files from CAD, 3D scans and 3D printing. Open a mesh, see its
+problems in 3D, repair it, and export it in one of these formats.
 
 - Problems in the 3D view: holes (open edges, red), flipped parts (magenta),
   non-manifold edges (yellow), degenerate triangles (green). «Next Problem»
@@ -19,17 +19,28 @@ and export a binary STL.
     duplicates, fix orientation, fill tiny holes (2), stitch seams (2),
     fix orientation (2), fill holes, merge bodies, fix degenerate faces,
     remove tiny shells, split T-junctions. When the mesh is still not
-    closed: alpha wrap, then volume rebuild. The last step, STL-safe
-    output, keeps the counts after the export to STL. The tooltip of
-    «What the repair did» shows each step with its count.
+    closed: alpha wrap, then volume rebuild. The tooltip of «What the
+    repair did» shows each step with its count.
   - **alpha wrap**: one closed shell around the whole model, shrunk onto
     the surface.
   - **Windows**: the repair service of Windows (the same as «Fix model» in
     the slicers). Windows only.
   - **volume rebuild**: a new closed surface from a cell grid, for very
     dirty models.
-- Units: the program guesses the units from the size (mm, cm, m, in). The
-  export keeps the units of the input file.
+- Units: the program guesses the units from the size (mm, cm, m, in). A
+  3MF or glTF file gives its unit. The export keeps the units of the input
+  file. 3MF is always in mm (the unit of the slicers), glTF in m.
+- Formats (open and export): STL (binary and ASCII), 3MF, OBJ, PLY (binary
+  and ASCII), OFF, glTF (.glb and .gltf), VTK (.vtp and legacy .vtk).
+- Bodies: the objects of a 3MF, OBJ, ASCII STL or glTF file are separate
+  bodies. The repair repairs each body alone. The export keeps them as
+  objects in 3MF, OBJ, ASCII STL, glTF and VTK; the other formats get one
+  merged body.
+- STL-safe output: STL and glTF keep float32 coordinates, and an STL reader
+  joins points at the same place. Before such an export, the program moves
+  the points that the rounding would join or make into a flat triangle, by
+  about 0.001 mm. Thus the file keeps the counts of the repaired mesh. The
+  other formats keep the points as they are.
 - Undo and Reset. Languages: English and Ukrainian.
 - The 3D view works on all GPUs and without a GPU: wgpu (DX12, Vulkan,
   Metal), software adapters (WARP, lavapipe, llvmpipe), VTK, and a CPU

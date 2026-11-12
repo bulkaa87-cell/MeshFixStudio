@@ -10,6 +10,10 @@ export, and the close during a repair. The windows open off-screen
    meshfix -> 0 holes / flipped / non-manifold / degenerate and closed,
    export -> load the STL again -> the same counts and triangles, the
    units of the input file; Undo and Reset; the Ukrainian interface.
+2b. The formats: an export in each format (the same counts, the units,
+   the step «STL-safe output» only for STL and glTF), the format of the
+   dialog filter, a 3MF with two bodies (each body repaired, the names
+   kept, a merge said in the log).
 3. Close during a repair: in this process (the result is ignored, no
    error), and in a child process (it ends with exit code 0, without
    "QThread: Destroyed").
@@ -251,14 +255,103 @@ def part_small(win):
         QtWidgets.QFileDialog.getOpenFileName = real_open
         QtWidgets.QFileDialog.getSaveFileName = real_save
     check("uk: the file dialog texts", len(seen) == 4
-          and "Open a mesh" not in seen and "Export binary STL" not in seen
-          and "STL binary (*.stl)" not in seen, seen)
+          and "Open a mesh" not in seen and "Export" not in seen
+          and "STL binary (*.stl)" not in seen[3]
+          and "STL двійковий (*.stl)" in seen[3], seen)
     check("the steps of the repair in the tooltip",
           win.lbl_summary.toolTip().count("\n") >= 10, win.lbl_summary.toolTip())
     win.set_language("en")
     pump(200)
     texts = {b.text() for b in win.findChildren(QtWidgets.QPushButton)}
     check("en again", {"Repair", "Open…"} <= texts, sorted(texts))
+
+
+def part_formats(win):
+    print("2b. the formats: each export format, the dialog, two bodies")
+    d1 = win.state.diag
+    check("the repaired model", methods.clean(d1), counts(d1))
+    for key in geo.EXPORT_FORMATS:
+        fmt = geo.FORMATS[key]
+        _asked.clear()
+        out = win.export_file(os.path.join(TMP, f"fmt_{key}{fmt.suffix}"),
+                              key)
+        wait(win)
+        ec = win.export_check
+        info = win.export_info
+        ok = (out is not None and ec is not None and info.fmt.key == key
+              and counts(ec) == counts(d1)
+              and ec.n_triangles == d1.n_triangles and not _asked)
+        raw = geo.load_surface(str(out)) if out else None
+        factor = (geo.guess_scale(raw)[0] if raw is not None and fmt.unit
+                  else win.factor)
+        span = max(geo.diagnose(geo.apply_scale(raw, factor)).size) * 1000 \
+            if raw is not None else 0
+        check(f"export {key}: the same counts, 40 mm, stl-safe step "
+              f"{'on' if fmt.stl_safe else 'off'}",
+              ok and abs(span - 40.0) < 0.05
+              and (info.stl_safe is not None) == fmt.stl_safe,
+              (key, ec and counts(ec), span, _asked))
+    with open(os.path.join(TMP, "fmt_ply_ascii.ply"), "rb") as fh:
+        check("export ply_ascii: an ASCII PLY", b"format ascii" in fh.read(80))
+    # The dialog: the filter selects the format; the next dialog starts
+    # with that filter.
+    filters = dict(geo.export_filters(1))
+    seen = []
+    real_save = QtWidgets.QFileDialog.getSaveFileName
+    QtWidgets.QFileDialog.getSaveFileName = staticmethod(
+        lambda *a, **k: (seen.append(a), (os.path.join(TMP, "pick"),
+                                          filters["3mf"]))[1])
+    try:
+        win.export_dialog()
+        wait(win)
+        win.export_dialog()
+        wait(win)
+    finally:
+        QtWidgets.QFileDialog.getSaveFileName = real_save
+    check("dialog: a name without an extension gets the one of the filter",
+          os.path.isfile(os.path.join(TMP, "pick.3mf"))
+          and win.export_info.fmt.key == "3mf")
+    check("dialog: all formats, the last format first",
+          len(seen) == 2 and seen[1][4] == filters["3mf"]
+          and seen[1][2].endswith(".3mf")
+          and seen[1][3].count(";;") == len(geo.EXPORT_FORMATS) - 1,
+          [s[2:] for s in seen])
+    # A 3MF with two bodies (in mm): open, repair each body, export.
+    p, t = mc.cube(40.0)
+    half = np.delete(np.asarray(t), 2, 0)
+    two = geo.join_bodies([
+        ("Left", poly(np.asarray(p) / 1000.0, half)),
+        ("Right", poly((np.asarray(p) + 60.0) / 1000.0, half))])
+    src = os.path.join(TMP, "two.3mf")
+    geo.save_mesh(two, src)
+    check("open the 3MF", win.open_file(src) and wait(win))
+    info = {k: v.text() for k, v in win.info.items()}
+    check("3MF: 2 bodies, unit mm from the file, 6 holes",
+          info["bodies"] == "2" and win.units_text() == "mm"
+          and win.unit_given and "guessed" not in info["units"]
+          and win.state.diag.open_edges == 6, (info, win.units_text()))
+    win.repair("meshfix")
+    wait(win)
+    check("3MF: each body repaired, the names kept",
+          methods.clean(win.state.diag) and win.state.diag.parts == 2
+          and geo.body_names(win.state.mesh) == ["Left", "Right"],
+          (counts(win.state.diag), geo.body_names(win.state.mesh)))
+    out = win.export_file(os.path.join(TMP, "two_fixed.3mf"))
+    wait(win)
+    back = geo.load_surface(str(out))
+    check("3MF export: two objects with the names",
+          geo.body_names(back) == ["Left", "Right"]
+          and counts(win.export_check) == counts(win.state.diag))
+    log0 = win.log.toPlainText()
+    out = win.export_file(os.path.join(TMP, "two_fixed.ply"))
+    wait(win)
+    note = win.log.toPlainText()[len(log0):]
+    check("PLY export: the log says that the bodies are merged",
+          "keeps no bodies" in note and "keeps no unit" in note, note)
+    texts = [text for _k, text in geo.export_filters(2)]
+    check("filters with 2 bodies say kept or merged",
+          any("bodies as objects" in s for s in texts)
+          and any("bodies merged" in s for s in texts), texts)
 
 
 CHILD = '''
@@ -350,6 +443,7 @@ def main():
     try:
         win = part_window()
         part_small(win)
+        part_formats(win)
         win.close()
         pump(200)
         part_close()

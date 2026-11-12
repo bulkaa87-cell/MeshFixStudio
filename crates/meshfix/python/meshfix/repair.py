@@ -167,17 +167,22 @@ def _triangles(mesh: pv.PolyData) -> np.ndarray:
 
 
 def repair_arrays(points_mm, tris, *, wrap: bool = True,
-                  method: str = "meshfix"):
-    """(points mm, triangles) → (points mm, triangles, report). No pyvista."""
+                  method: str = "meshfix", stl_safe: bool = True):
+    """(points mm, triangles) → (points mm, triangles, report). No pyvista.
+
+    stl_safe=False: no last step stl_safe_output. Use it when the program
+    applies that step at the export to STL (meshfix.check.save_mesh).
+    """
     if not available():
         raise RuntimeError(why_not())
     if method not in METHODS:
         raise ValueError(f"no meshfix method {method!r}")
     args = (np.ascontiguousarray(points_mm, dtype=np.float64),
             np.ascontiguousarray(tris, dtype=np.int64), True, bool(wrap))
-    if method == "meshfix":
-        return _rs.repair(*args)
-    return _rs.repair(*args, method=method)
+    kw = {} if method == "meshfix" else {"method": method}
+    if not stl_safe:
+        kw["stl_safe"] = False
+    return _rs.repair(*args, **kw)
 
 
 # The end of a repair step text that is a verdict (what the repair did):
@@ -230,13 +235,14 @@ def steps_text(report: dict) -> str:
 
 
 def repair(mesh: pv.PolyData, say=None,
-           method: str = "meshfix") -> pv.PolyData:
+           method: str = "meshfix", stl_safe: bool = True) -> pv.PolyData:
     """A repaired copy of `mesh`. The input and the output are in m.
 
     The same contract as fs_winfix.repair: call it from a thread
     (RepairWorker). Rust releases the GIL, thus the window stays live.
     method: a key of METHODS. A forced method that gives no result raises
     RuntimeError (the window then puts the model back).
+    stl_safe: the last step stl_safe_output (see repair_arrays).
     """
     global last_report
     say = say or (lambda _text: None)
@@ -249,7 +255,8 @@ def repair(mesh: pv.PolyData, say=None,
     label, stage = METHODS[method]
     say(tr("{label}: {n_tri} triangles{v}", label=label, n_tri=len(tri), v=", 12 steps" if stage is None else ""))
     try:
-        out_p, out_t, report = repair_arrays(pts, tri, method=method)
+        kw = {} if stl_safe else {"stl_safe": False}
+        out_p, out_t, report = repair_arrays(pts, tri, method=method, **kw)
     except ValueError as exc:
         raise RuntimeError(tr("{label} failed: {exc}.", label=label, exc=exc)) from exc
     last_report = report
