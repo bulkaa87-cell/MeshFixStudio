@@ -353,6 +353,17 @@ def part_formats():
     check("split_bodies: 2 bodies of 12 triangles",
           [(n, m.n_cells, m.n_points) for n, m in split]
           == [("Left side", 12, 8), ("Right", 12, 8)], split)
+    holes = geo.join_bodies([("A", mm_poly(p, np.delete(t, 2, 0))),
+                             ("B", mm_poly(p, np.delete(t, 5, 0), 30.0))])
+    res = methods.repair_bodies("meshfix", holes, stl_safe=False)
+    check("repair_bodies: each body repaired, the names kept",
+          geo.body_names(res) == ["A", "B"]
+          and methods.clean(geo.diagnose(res)) and res.n_cells == 24,
+          (geo.body_names(res), res.n_cells))
+    res = methods.repair_bodies("alphawrap", holes)
+    check("repair_bodies: a wrap method gives one body",
+          geo.body_names(res) == [] and geo.diagnose(res).closed,
+          geo.body_names(res))
     for key in want_keys:
         fmt = geo.FORMATS[key]
         path = os.path.join(tmp, f"two{fmt.suffix}")

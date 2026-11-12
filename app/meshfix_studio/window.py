@@ -153,22 +153,6 @@ def _state_of(mesh) -> State:
                  geo.problem_layers(mesh, diag))
 
 
-def repair_bodies(key: str, mesh, say=None):
-    """Repair each body of `mesh` alone (meshfix.methods.repair_meshes), and
-    keep the body names. A method that makes one shell of all bodies
-    (mode "wrap") gives one body. No stl_safe_output step here: the export
-    applies it to STL and glTF only. Worker thread."""
-    bodies = geo.split_bodies(mesh)
-    outs = fs_repair.repair_meshes(key, [m for _n, m in bodies], say,
-                                   stl_safe=False)
-    if len(outs) != len(bodies):
-        return outs[0]
-    if len(bodies) == 1 and not bodies[0][0]:
-        return outs[0]
-    return geo.join_bodies([(name, out) for (name, _m), out
-                            in zip(bodies, outs)])
-
-
 class MeshViewport(vp.Viewport):
     """The shared «3D» view, without the «All» button (there is only the
     model here)."""
@@ -654,7 +638,10 @@ class MeshFixWindow(QtWidgets.QMainWindow):
 
         def job(_meshes, say):
             t0 = time.perf_counter()
-            out = repair_bodies(key, before.mesh, say)
+            # Each body alone, without the step stl_safe_output: the
+            # export applies it to STL and glTF only.
+            out = fs_repair.repair_bodies(key, before.mesh, say,
+                                          stl_safe=False)
             sec = time.perf_counter() - t0
             say(tr("Checking the result…"))
             return key, sec, fs_repair.summary(key), _state_of(out)

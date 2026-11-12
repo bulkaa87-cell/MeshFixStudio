@@ -15,6 +15,9 @@ What is here:
   from all models together).
 - repair_meshes(key, meshes, say): the repair. Call it from a worker thread,
   never from the thread of the window.
+- repair_bodies(key, mesh, say): the repair of each body of one mesh (the
+  bodies of a 3MF, OBJ, ASCII STL or glTF file, meshfix.formats), with the
+  names of the bodies.
 - counts(diagnosis), COUNTS: the four counts of the program check that a
   repair must make zero.
 - summary(key): the text "what the last repair did" (meshfix methods).
@@ -148,6 +151,22 @@ def repair_meshes(key: str, meshes, say=None, merged=None,
             out.append(fs_meshfix.repair(mesh, tell, method=key,
                                           stl_safe=stl_safe))
     return out
+
+
+def repair_bodies(key: str, mesh, say=None, stl_safe: bool = True):
+    """Repair each body of `mesh` alone (repair_meshes) and keep the body
+    names (meshfix.formats.BODY). A method of mode "wrap" makes one shell
+    of all bodies: then the result is one body. A mesh without bodies gives
+    the result of repair_meshes as it is. Call it from a worker thread."""
+    from . import formats
+    bodies = formats.split_bodies(mesh)
+    outs = repair_meshes(key, [m for _n, m in bodies], say, stl_safe=stl_safe)
+    if len(outs) != len(bodies):
+        return outs[0]
+    if len(bodies) == 1 and not bodies[0][0]:
+        return outs[0]
+    return formats.join_bodies([(name, out) for (name, _m), out
+                                in zip(bodies, outs)])
 
 
 def counts(diagnosis) -> dict:
