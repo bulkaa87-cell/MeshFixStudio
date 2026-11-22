@@ -483,6 +483,13 @@ def part_split(win):
           and swatch == [QtGui.QColor(mfa.body_color(i, 2)).name()
                          for i in range(2)], (swatch, style["cmap"]))
     lst.item(1).setCheckState(QtCore.Qt.Unchecked)
+    pump(100)
+    shown = win.view.actors["body"].mesh
+    check("unchecked body: not in the 3D view, the colour of body 1 stays",
+          shown.n_cells == 12
+          and set(np.asarray(shown.cell_data[geo.BODY])) == {0}
+          and win.view.body_style(shown)["cmap"] == style["cmap"],
+          shown.n_cells)
     out = win.export_file(os.path.join(TMP, "first_only.stl"), "stl")
     wait(win)
     check("export: only the checked body", out is not None
@@ -491,8 +498,12 @@ def part_split(win):
     lst.item(0).setCheckState(QtCore.Qt.Unchecked)
     check("no body checked: no export", not win.btn_export.isEnabled()
           and win.export_mesh() is None)
+    check("no body checked: the view is empty", "body" not in win.view.actors)
     lst.item(0).setCheckState(QtCore.Qt.Checked)
     lst.item(1).setCheckState(QtCore.Qt.Checked)
+    pump(100)
+    check("all checked again: all in the view",
+          win.view.actors["body"].mesh.n_cells == 24)
     files = win.export_bodies(os.path.join(TMP, "each.stl"), "stl")
     wait(win)
     check("export each body: each_1.stl, each_2.stl",

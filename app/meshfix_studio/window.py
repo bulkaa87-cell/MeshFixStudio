@@ -173,6 +173,9 @@ class MeshViewport(vp.Viewport):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.to_model_requested.connect(self.fit_body)
+        # The number of bodies of the whole model (the window sets it). A
+        # body keeps its colour when the view shows only some bodies.
+        self.n_bodies = 0
 
     def body_style(self, mesh) -> dict:
         """One colour for each body when the mesh has more than one (for
@@ -180,7 +183,7 @@ class MeshViewport(vp.Viewport):
         colours (body_color)."""
         if geo.BODY in mesh.cell_data:
             ids = np.asarray(mesh.cell_data[geo.BODY])
-            n = int(ids.max()) + 1 if ids.size else 0
+            n = max(int(ids.max()) + 1 if ids.size else 0, self.n_bodies)
             if n > 1:
                 k = min(n, 256)              # the size limit of the colour table
                 colors = [body_color(i, n) for i in range(k)]
@@ -382,7 +385,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
     def _build_bodies(self) -> QtWidgets.QWidget:
         """The section «Bodies to export»: a list of the bodies with the
         colour of the 3D view and a check box (on by default). Only the
-        bodies with a check go to the export. Closed at the start."""
+        bodies with a check are in the 3D view and go to the export.
+        Closed at the start."""
         box = QtWidgets.QWidget()
         lay = QtWidgets.QVBoxLayout(box)
         lay.setContentsMargins(0, 6, 0, 0)
@@ -446,15 +450,36 @@ class MeshFixWindow(QtWidgets.QMainWindow):
                                else QtCore.Qt.Checked)
             lst.addItem(item)
         lst.blockSignals(False)
-        self._bodies_changed()
+        self._bodies_changed(update_view=False)
 
-    def _bodies_changed(self):
+    def _show_bodies(self, reset: bool = False):
+        """Show the bodies with a check in the 3D view. A body without a
+        check is not in the view and not in the export."""
+        st = self.state
+        if st is None:
+            return
+        v = self.view
+        n = self.lst_bodies.count()
+        v.n_bodies = n
+        on = self.export_selection()
+        disp = st.display
+        if not on and n:
+            v.show_body(None)
+            return
+        if len(on) < n and geo.BODY in disp.cell_data:
+            ids = np.asarray(disp.cell_data[geo.BODY])
+            disp = disp.remove_cells(np.nonzero(~np.isin(ids, on))[0])
+        v.show_body(disp, reset=reset)
+
+    def _bodies_changed(self, update_view: bool = True):
         lst = self.lst_bodies
         names = [lst.item(i).text() for i in range(lst.count())]
         on = self.export_selection()
         self._unchecked = {nm for i, nm in enumerate(names) if i not in on}
         self.lbl_bodies.setText(f"{len(on)} / {len(names)}" if names else "")
         self.chk_each.setEnabled(len(on) > 1)
+        if update_view:
+            self._show_bodies()
         self._sync()
 
     def export_selection(self) -> list:
@@ -1149,7 +1174,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             v.show_body(None)
             self._refresh_info()
             return
-        v.show_body(st.display, reset=reset_camera)
+        self._show_bodies(reset=reset_camera)
         d = st.diag
         counts = {"holes": d.open_edges, "flip": d.flipped_faces,
                   "nm": d.non_manifold_edges, "degen": d.degenerate}

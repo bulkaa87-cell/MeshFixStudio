@@ -3,6 +3,11 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.4.2
+
+- «Bodies to export»: a body without a check is also not in the 3D view.
+  The other bodies keep their colours.
+
 ## What is new in 0.4.1
 
 - The Windows installer removes the installed version (also 0.4.0 and

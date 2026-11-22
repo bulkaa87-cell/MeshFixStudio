@@ -174,6 +174,9 @@ keep it as a changelog.
     of an installed version (HKCU, HKLM 64 and 32 bit; ShellExec, so an
     install for all users can ask for administrator rights) before it
     copies the new files.
+20. Release v0.4.2 (2026-11-22): a body without a check in «Bodies to
+    export» is not in the 3D view (MeshFixWindow._show_bodies; the colours
+    use the body count of the whole model, MeshViewport.n_bodies).
 
 ## Next
 

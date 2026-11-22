@@ -48,7 +48,8 @@ problems in 3D, repair it, and export it in one of these formats.
   own in the 3D view.
 - Bodies to export: a section under the log (closed at the start) lists
   the bodies with the colour of the 3D view and a check box (on by
-  default). The export writes only the checked bodies. With «A file for
+  default). A body without a check is not in the 3D view, and the export
+  writes only the checked bodies. With «A file for
   each body», each checked body goes to a file of its own:
   <name>_<body>.<extension> in the selected folder. The program checks
   each written file.
