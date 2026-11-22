@@ -1,6 +1,6 @@
 ; Inno Setup script of the Windows installer of MeshFix Studio.
 ;
-;   iscc /DAppVersion=0.4.0 packaging\windows\meshfix_studio.iss
+;   iscc /DAppVersion=0.4.1 packaging\windows\meshfix_studio.iss
 ;
 ; Input: the PyInstaller folder dist\MeshFix Studio\ (see
 ; packaging\pyinstaller\meshfix_studio.spec). Output:
@@ -11,7 +11,7 @@
 ; the "Open with MeshFix Studio" entry for .stl, .obj and .ply files.
 
 #ifndef AppVersion
-  #define AppVersion "0.4.0"
+  #define AppVersion "0.4.1"
 #endif
 #define AppName "MeshFix Studio"
 #define AppExe "MeshFix Studio.exe"
@@ -71,3 +71,63 @@ Root: HKA; Subkey: "Software\Classes\.ply\OpenWithProgids"; ValueType: string; V
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+
+[Code]
+// An installed version is removed before the new version is installed.
+// Without this, files that the new version does not have stay in the
+// program folder (an old DLL can then break the program), and an install
+// "for all users" and an install "for this user" stay side by side.
+// The settings of the program (registry, AppData) stay.
+
+const
+  UninstKey = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\{6E1C7A52-4F0B-4C55-9E7B-2D4F2A6C9B31}_is1';
+
+function OldUninstaller(RootKey: Integer): String;
+var
+  S: String;
+begin
+  Result := '';
+  if RegQueryStringValue(RootKey, UninstKey, 'UninstallString', S) then
+    Result := RemoveQuotes(S);
+end;
+
+procedure RemoveOld(RootKey: Integer);
+var
+  Exe: String;
+  Code, Tries: Integer;
+begin
+  Exe := OldUninstaller(RootKey);
+  if (Exe = '') or not FileExists(Exe) then
+    Exit;
+  Log('Removing the installed version: ' + Exe);
+  // ShellExec, not Exec: the uninstaller of an install for all users
+  // needs administrator rights, and ShellExec lets Windows ask for them.
+  if not ShellExec('', Exe, '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART',
+                   '', SW_HIDE, ewWaitUntilTerminated, Code) then
+    Log('The uninstaller did not start: ' + SysErrorMessage(Code))
+  else
+    Log('The uninstaller ended');
+  // The uninstaller can delete its own file a moment after it ends: wait
+  // for that (at most 15 s), so the new files do not go in too early.
+  Tries := 0;
+  while FileExists(Exe) and (Tries < 75) do
+  begin
+    Sleep(200);
+    Tries := Tries + 1;
+  end;
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssInstall then
+  begin
+    RemoveOld(HKCU);
+    if IsWin64 then
+    begin
+      RemoveOld(HKLM64);
+      RemoveOld(HKLM32);
+    end
+    else
+      RemoveOld(HKLM);
+  end;
+end;

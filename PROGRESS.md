@@ -170,6 +170,10 @@ keep it as a changelog.
     each body). Tests: cargo 62, test_core.py and test_app.py 0 problems.
     OpenFOAM Studio has the core functions after it moves its pin; it has
     no button for them yet.
+19. Release v0.4.1 (2026-11-22): the Windows installer runs the uninstaller
+    of an installed version (HKCU, HKLM 64 and 32 bit; ShellExec, so an
+    install for all users can ask for administrator rights) before it
+    copies the new files.
 
 ## Next
 

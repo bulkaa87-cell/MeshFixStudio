@@ -3,6 +3,14 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.4.1
+
+- The Windows installer removes the installed version (also 0.4.0 and
+  older) before it installs the new one. Files of the old version do not
+  stay in the program folder, and an install "for all users" and an
+  install "for this user" do not stay side by side. The settings of the
+  program stay.
+
 ## What is new in 0.4.0
 
 - «Split» (Ctrl+P): each separate part of a body becomes a body of its own,
