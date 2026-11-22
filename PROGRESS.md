@@ -177,6 +177,11 @@ keep it as a changelog.
 20. Release v0.4.2 (2026-11-22): a body without a check in «Bodies to
     export» is not in the 3D view (MeshFixWindow._show_bodies; the colours
     use the body count of the whole model, MeshViewport.n_bodies).
+21. Release v0.4.3 (2026-11-22): foamview.level._cell_ids reads implicit
+    VTK arrays (vtkAffineArray offsets of 2-point lines). In the frozen
+    OpenFOAM Studio 0.2.1, vtk_to_numpy failed on them (NameError
+    vtkConstants in VTK 9.7 numpy_support), and the domain, the point and
+    the flow arrow were not drawn.
 
 ## Next
 

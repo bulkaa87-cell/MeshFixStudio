@@ -3,6 +3,14 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.4.3
+
+- The 3D view reads the lines of a mesh also when VTK keeps their offsets
+  in an implicit array (vtkAffineArray). In the installed program, such
+  lines (for example the edges of a box) were not drawn, because
+  vtk_to_numpy of VTK 9.7 fails on these arrays there. OpenFOAM Studio
+  showed no domain, point in flow and flow arrow for this reason.
+
 ## What is new in 0.4.2
 
 - «Bodies to export»: a body without a check is also not in the 3D view.
