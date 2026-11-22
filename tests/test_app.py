@@ -242,17 +242,17 @@ def part_small(win):
           win.view.chk["body"].text())
     # The file dialogs are static calls: their texts go through tr().
     seen = []
-    real_open = QtWidgets.QFileDialog.getOpenFileName
+    real_open = QtWidgets.QFileDialog.getOpenFileNames
     real_save = QtWidgets.QFileDialog.getSaveFileName
-    QtWidgets.QFileDialog.getOpenFileName = staticmethod(
-        lambda *a, **k: (seen.extend([str(a[1]), str(a[3])]), ("", ""))[1])
+    QtWidgets.QFileDialog.getOpenFileNames = staticmethod(
+        lambda *a, **k: (seen.extend([str(a[1]), str(a[3])]), ([], ""))[1])
     QtWidgets.QFileDialog.getSaveFileName = staticmethod(
         lambda *a, **k: (seen.extend([str(a[1]), str(a[3])]), ("", ""))[1])
     try:
         win.open_dialog()
         win.export_dialog()
     finally:
-        QtWidgets.QFileDialog.getOpenFileName = real_open
+        QtWidgets.QFileDialog.getOpenFileNames = real_open
         QtWidgets.QFileDialog.getSaveFileName = real_save
     check("uk: the file dialog texts", len(seen) == 4
           and "Open a mesh" not in seen and "Export" not in seen
@@ -438,12 +438,99 @@ def part_close():
     check("child: ends soon after the close (< 60 s)", sec < 60, sec)
 
 
+def part_split(win):
+    print("2c. split into parts")
+    p, t = mc.cube(20.0)
+    path = os.path.join(TMP, "touch.stl")
+    poly(*mc.join((p, t), (p + [20.0, 0, 0], t))).save(path)
+    check("open two cubes that touch", win.open_file(path) and wait(win))
+    check("one body before", geo.body_count(win.state.mesh) == 1)
+    check("split starts", win.split_parts())
+    check("split ends", wait(win))
+    check("split: 2 bodies in the info", win.info["bodies"].text() == "2",
+          win.info["bodies"].text())
+    check("split: one colour for each body",
+          "scalars" in win.view.body_style(win.state.display))
+    check("split: undo is possible", win.btn_undo.isEnabled())
+    n = len(win.history)
+    win.split_parts()
+    wait(win)
+    check("split again: nothing to split, no new undo step",
+          len(win.history) == n and win.info["bodies"].text() == "2")
+    out = win.export_file(os.path.join(TMP, "touch.3mf"), "3mf")
+    wait(win)
+    check("3MF export keeps 2 bodies", out is not None and geo.body_count(
+        geo.load_surface(str(out))) == 2)
+    win.undo()
+    check("undo: one body", win.info["bodies"].text() == "1"
+          and "scalars" not in win.view.body_style(win.state.display))
+    win.split_parts()
+    wait(win)
+    check("bodies to export: closed by default",
+          not win.btn_bodies.isChecked() and not win.bodies_panel.isVisible())
+    win.btn_bodies.setChecked(True)
+    pump(100)
+    lst = win.lst_bodies
+    check("bodies to export: open, 2 bodies, all checked",
+          win.bodies_panel.isVisible() and lst.count() == 2
+          and win.export_selection() == [0, 1], lst.count())
+    style = win.view.body_style(win.state.display)
+    from meshfix_studio import window as mfa
+    swatch = [lst.item(i).icon().pixmap(14, 14).toImage().pixelColor(7, 7)
+              .name() for i in range(2)]
+    check("bodies to export: the colours of the 3D view",
+          swatch == [QtGui.QColor(c).name() for c in style["cmap"]]
+          and swatch == [QtGui.QColor(mfa.body_color(i, 2)).name()
+                         for i in range(2)], (swatch, style["cmap"]))
+    lst.item(1).setCheckState(QtCore.Qt.Unchecked)
+    out = win.export_file(os.path.join(TMP, "first_only.stl"), "stl")
+    wait(win)
+    check("export: only the checked body", out is not None
+          and geo.load_surface(str(out)).n_cells == 12
+          and win.export_check.n_triangles == 12)
+    lst.item(0).setCheckState(QtCore.Qt.Unchecked)
+    check("no body checked: no export", not win.btn_export.isEnabled()
+          and win.export_mesh() is None)
+    lst.item(0).setCheckState(QtCore.Qt.Checked)
+    lst.item(1).setCheckState(QtCore.Qt.Checked)
+    files = win.export_bodies(os.path.join(TMP, "each.stl"), "stl")
+    wait(win)
+    check("export each body: each_1.stl, each_2.stl",
+          [f.name for f in files] == ["each_1.stl", "each_2.stl"]
+          and all(f.is_file() for f in files), files)
+    check("export each body: the check of each file",
+          len(win.export_checks) == 2 and all(
+              d.closed and d.n_triangles == 12 for d in win.export_checks),
+          [(d.closed, d.n_triangles) for d in win.export_checks])
+
+    # Several files: a body for each file, one colour for each body.
+    a = os.path.join(TMP, "first.stl")
+    b = os.path.join(TMP, "second.stl")
+    poly(p, t).save(a)
+    poly(p + [40.0, 0, 0], t).save(b)
+    check("open 2 files", win.open_files([a, b]) and wait(win))
+    check("2 files: 2 bodies with the file names",
+          geo.body_names(win.state.mesh) == ["first", "second"]
+          and win.info["bodies"].text() == "2"
+          and "scalars" in win.view.body_style(win.state.display),
+          geo.body_names(win.state.mesh))
+    check("2 files: no undo step", not win.history)
+    c = os.path.join(TMP, "third.stl")
+    poly(p + [80.0, 0, 0], t).save(c)
+    check("add a file", win.add_files([c]) and wait(win))
+    check("add: 3 bodies", geo.body_names(win.state.mesh)
+          == ["first", "second", "third"], geo.body_names(win.state.mesh))
+    win.undo()
+    check("undo of add: 2 bodies", geo.body_count(win.state.mesh) == 2)
+
+
 def main():
     t0 = time.time()
     try:
         win = part_window()
         part_small(win)
         part_formats(win)
+        part_split(win)
         win.close()
         pump(200)
         part_close()

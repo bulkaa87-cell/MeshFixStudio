@@ -48,6 +48,7 @@
  "The native module meshfix._native is missing. Install the package meshfix-core again, or build it: maturin develop -m crates/meshfix/Cargo.toml": "Немає рідного модуля meshfix._native. Встановіть пакет meshfix-core ще раз або зберіть його: maturin develop -m crates/meshfix/Cargo.toml",
  "The volume rebuild gave no surface: the model probably consists of parts thinner than ~0.7 mm.": "Обʼємна перебудова не дала поверхні: модель, мабуть, складається з частин, тонших за ~0.7 мм.",
  "The volume rebuild lost the body: {v:.0f}% of the volume is left. Most often this is a large hole through which the “outside” leaked inside. Try meshfix or alpha wrap.": "Обʼємна перебудова втратила тіло: лишилося {v:.0f}% обʼєму. Найчастіше це велика дірка, крізь яку «зовні» затекло всередину. Спробуйте meshfix або alpha wrap.",
+ "This build of meshfix has no split. Install a newer version.": "У цій збірці meshfix немає розділення. Встановіть новішу версію.",
  "VTK PolyData": "VTK PolyData",
  "VTK legacy": "VTK (старий формат)",
  "Volume rebuild": "Обʼємна перебудова",

@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import math
 import os
+import re
+from pathlib import Path
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -874,7 +876,8 @@ def write_stl(mesh: pv.PolyData, path: str, binary: bool = True) -> None:
 # READERS, the export dialog from export_filters().
 from . import formats as _fmt
 from .formats import (BODY, BODY_NAMES, FORMATS, UNIT, Format, body_count,  # noqa: F401
-                      body_names, join_bodies, split_bodies)
+                      SplitInfo, body_names, combine, given_names,
+                      join_bodies, split_bodies, split_parts)
 
 
 def _read_vtk(path):
@@ -991,6 +994,49 @@ def save_mesh(mesh: pv.PolyData, path, fmt=None, *, unit_m: float = 1.0,
     fmt.write(path, parts, unit)
     return SaveInfo(path, fmt, unit, fmt.unit is not None, n, len(parts),
                     report)
+
+
+_BAD_NAME = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+
+
+def body_file_names(mesh: pv.PolyData, path, source_stem: str = "") -> list:
+    """The file of each body for save_bodies(): <stem>_<label><suffix> in
+    the folder of `path`. The label is the name of the body without the
+    prefix `source_stem`_ (the names that «Split» gives), or the number of
+    the body when it has no name. Two equal labels get _2, _3, ..."""
+    path = Path(path)
+    given = given_names(mesh)
+    n = len(split_bodies(mesh))
+    out, seen = [], set()
+    for i in range(n):
+        name = given[i] if i < len(given) else ""
+        if source_stem and name.startswith(source_stem + "_"):
+            name = name[len(source_stem) + 1:]
+        label = _BAD_NAME.sub("_", name).strip(" .") or str(i + 1)
+        file = path.with_name(f"{path.stem}_{label}{path.suffix}")
+        k = 2
+        while file.name.lower() in seen:
+            file = path.with_name(f"{path.stem}_{label}_{k}{path.suffix}")
+            k += 1
+        seen.add(file.name.lower())
+        out.append(file)
+    return out
+
+
+def save_bodies(mesh: pv.PolyData, path, fmt=None, *, unit_m: float = 1.0,
+                stl_safe: bool = True, source_stem: str = "") -> list:
+    """Write each body of `mesh` to a file of its own (body_file_names()),
+    with save_mesh(). Returns [(path, SaveInfo, body mesh)]. A 3MF, OBJ,
+    ASCII STL or glTF file keeps the name of its body."""
+    files = body_file_names(mesh, path, source_stem)
+    names = body_names(mesh)
+    out = []
+    for i, ((_name, body), file) in enumerate(zip(split_bodies(mesh), files)):
+        name = names[i] if i < len(names) else file.stem
+        one = join_bodies([(name, body)])
+        info = save_mesh(one, file, fmt, unit_m=unit_m, stl_safe=stl_safe)
+        out.append((file, info, body))
+    return out
 
 
 def _stl_safe(parts: list) -> dict | None:

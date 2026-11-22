@@ -164,6 +164,92 @@ def join_bodies(parts) -> pv.PolyData:
     return out
 
 
+@dataclass
+class SplitInfo:
+    """What split_parts() did."""
+    bodies_before: int
+    bodies_after: int
+    shared_edges: int = 0      # edges with more than two faces
+    cavities: int = 0          # cavity shells kept with their outer shell
+
+
+def split_parts(mesh: pv.PolyData, stem: str = "") -> tuple:
+    """Split each body of `mesh` into its separate parts (the «Split»
+    command). Returns (mesh, SplitInfo). The new mesh has one body for each
+    part, with the body array and the names: a body "X" with three parts
+    gives "X_1", "X_2", "X_3" (the most triangles first). A body without a
+    name uses `stem` (the file name) as X. A body with one part keeps its
+    name. The unit of the file stays.
+
+    The rule (crates/meshfix/src/split.rs): faces that share an edge are
+    one part, but two solids that touch on a face, an edge or a vertex are
+    two parts (Bambu Studio splits them too, Blender does not). A cavity
+    stays in the body around it."""
+    from . import _native
+    if not hasattr(_native, "split_parts"):
+        raise RuntimeError(tr("This build of meshfix has no split. "
+                              "Install a newer version."))
+    bodies = split_bodies(mesh)
+    out, shared, cavities = [], 0, 0
+    given = given_names(mesh)
+    for i, (name, m) in enumerate(bodies):
+        # split_bodies() gives "body 1" for a body without a name.
+        if i >= len(given) or not given[i]:
+            name = stem
+        pts = np.asarray(m.points, np.float64)
+        tris = _tris_of(m)
+        r = _native.split_parts(np.ascontiguousarray(pts),
+                                np.ascontiguousarray(tris))
+        n = int(r["n_parts"])
+        shared += int(r["shared_edges"])
+        cavities += int(r["cavities"])
+        if n <= 1:
+            out.append((name, _poly(pts, tris)))
+            continue
+        labels = np.asarray(r["labels"])
+        for k in range(n):
+            t = tris[labels == k]
+            used, local = np.unique(t.ravel(), return_inverse=True)
+            out.append((f"{name}_{k + 1}" if name else "",
+                        _poly(pts[used], local.reshape(-1, 3))))
+    info = SplitInfo(len(bodies), len(out), shared, cavities)
+    if len(out) == len(bodies):
+        return mesh, info
+    new = join_bodies(out)
+    if UNIT in mesh.field_data:
+        new.field_data[UNIT] = np.asarray(mesh.field_data[UNIT])
+    return new, info
+
+
+def given_names(mesh) -> list:
+    """The names that the file or the program gave to the bodies ("" for
+    a body without a name). body_names() gives "body 1" for these."""
+    if mesh is None or BODY_NAMES not in mesh.field_data:
+        return []
+    return [str(n) for n in np.asarray(mesh.field_data[BODY_NAMES])]
+
+
+def combine(items) -> pv.PolyData:
+    """One mesh from several files: items = [(stem, mesh)], the meshes in
+    the same unit. Each body of each file becomes a body. A body with a
+    name keeps it. A body without a name gets the stem of its file (with
+    _1, _2, ... when the file has more than one such body)."""
+    out = []
+    for stem, mesh in items:
+        bodies = split_bodies(mesh)
+        given = given_names(mesh)
+        unnamed = sum(1 for i in range(len(bodies))
+                      if i >= len(given) or not given[i])
+        k = 0
+        for i, (_name, m) in enumerate(bodies):
+            name = given[i] if i < len(given) else ""
+            if not name:
+                k += 1
+                name = stem if unnamed == 1 else f"{stem}_{k}"
+            out.append((name, m))
+    return join_bodies(out)
+
+
 def to_polydata(data: Data) -> pv.PolyData:
     """The mesh of a reader result: the bodies, their names, the unit."""
     parts = [p for p in data.parts if len(p.tris)]

@@ -391,6 +391,26 @@ fn shell_projections<'py>(py: Python<'py>, points: numpy::PyReadonlyArray2<'py, 
         pz.into_pyarray(py).reshape([nx, ny])?.into_any()))
 }
 
+/// Split a surface into its separate parts (split.rs). Returns a dict:
+/// n_parts, labels (M,) int64 (part 0 has the most faces), shared_edges
+/// (edges with more than two faces), cavities (cavity shells kept with
+/// their outer shell).
+#[pyfunction]
+fn split_parts<'py>(py: Python<'py>, points: numpy::PyReadonlyArray2<'py, f64>,
+                    tris: numpy::PyReadonlyArray2<'py, i64>)
+                    -> PyResult<Bound<'py, PyDict>> {
+    let pts = rows3(&points, "points")?;
+    let tri = tri_rows(&tris, pts.len())?;
+    let r = py.detach(move || crate::split::split_parts(&pts, &tri));
+    let labels: Vec<i64> = r.labels.iter().map(|&l| l as i64).collect();
+    let d = PyDict::new(py);
+    d.set_item("n_parts", r.n_parts)?;
+    d.set_item("labels", labels.into_pyarray(py))?;
+    d.set_item("shared_edges", r.shared_edges)?;
+    d.set_item("cavities", r.cavities)?;
+    Ok(d)
+}
+
 #[pymodule]
 #[pyo3(name = "_native")]
 fn meshfix_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -402,6 +422,7 @@ fn meshfix_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(shell_projections, m)?)?;
     m.add_function(wrap_pyfunction!(stl_safe, m)?)?;
     m.add_function(wrap_pyfunction!(round_trip, m)?)?;
+    m.add_function(wrap_pyfunction!(split_parts, m)?)?;
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
     Ok(())
 }

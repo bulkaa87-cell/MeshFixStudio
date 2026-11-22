@@ -395,8 +395,8 @@ class Viewport(QtWidgets.QWidget):
         if "Normals" not in mesh.point_data:
             mesh = geo.display_mesh(mesh)
         self.actors["body"] = self.plotter.add_mesh(
-            mesh, color=COL_BODY, smooth_shading=False, specular=0.3,
-            show_edges=False, name="body", reset_camera=False)
+            mesh, smooth_shading=False, specular=0.3, show_edges=False,
+            name="body", reset_camera=False, **self.body_style(mesh))
         self.set_visible("body", self.chk["body"].isChecked())
         self._body_bounds = tuple(mesh.bounds)
         # Лінійка живе разом із тілом: габарит міняється від кожного
@@ -406,6 +406,12 @@ class Viewport(QtWidgets.QWidget):
         if reset:
             self.fit_body()
         self.plotter.render()
+
+    def body_style(self, mesh) -> dict:
+        """The colour arguments of add_mesh for the body. A subclass can
+        colour the body by a cell array (MeshFix Studio: one colour for
+        each body)."""
+        return {"color": COL_BODY}
 
     @property
     def has_model(self) -> bool:

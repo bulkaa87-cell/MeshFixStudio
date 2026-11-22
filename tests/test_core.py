@@ -8,6 +8,8 @@
 4. The method list: the Windows method only on Windows.
 5. The languages: English keys, the Ukrainian catalogue of the core.
 6. The step ids (and the old ids of a saved report), the file formats.
+6b. Split into parts: solids that touch on a face, an edge or a vertex,
+   a cavity, the body names, a binary STL round trip.
 7. Each file format: the repaired test meshes written and read again
    (the same counts, triangles and size, in mm and in m), two bodies, the
    units of 3MF and glTF.
@@ -407,6 +409,69 @@ def part_formats():
     part_foreign(tmp)
 
 
+def part_split():
+    print("6b. split into parts")
+    p, t = mc.cube()
+    a = (p, t)
+    face = (p + [10.0, 0, 0], t)          # touches a on the face x = 10
+    edge = (p + [0, 10.0, 10.0], t)       # touches a on an edge
+    corner = (p + [-10.0, -10.0, -10.0], t)   # touches a on a vertex
+    far = (p + [50.0, 0, 0], t)
+    cavity = (p * 0.2 + [4.0, 4.0, 4.0], t[:, [0, 2, 1]])
+    m = poly(*mc.join(a, face, edge, corner, far, cavity))
+    out, info = geo.split_parts(m)
+    names = geo.body_names(out)
+    check("split: 5 bodies, the cavity stays in its cube",
+          len(names) == 5 and info.cavities == 1 and info.shared_edges > 0,
+          (names, info))
+    sizes = sorted(int((np.asarray(out.cell_data[geo.BODY]) == i).sum())
+                   for i in range(len(names)))
+    check("split: 24 + 12 × 4 triangles", sizes == [12, 12, 12, 12, 24],
+          sizes)
+    check("split: each body is closed", all(
+        geo.diagnose(b).closed for _n, b in geo.split_bodies(out)))
+    same, info1 = geo.split_parts(poly(*a))
+    check("split: one cube stays one body",
+          same.n_cells == 12 and info1.bodies_after == 1, info1)
+    named = geo.join_bodies([("wing", poly(*mc.join(a, far))),
+                             ("fin", poly(*face))])
+    out, _info = geo.split_parts(named)
+    check("split: the names", geo.body_names(out)
+          == ["wing_1", "wing_2", "fin"], geo.body_names(out))
+    # A binary STL has no shared points: the reader joins them, the split
+    # gives the same 5 bodies.
+    import tempfile
+    path = os.path.join(tempfile.mkdtemp(prefix="meshfix_split_"), "touch.stl")
+    geo.write_mesh(poly(*mc.join(a, face, edge, corner, far, cavity)), path)
+    out, _info = geo.split_parts(geo.load_surface(path))
+    check("split: binary STL", geo.body_count(out) == 5, geo.body_count(out))
+    # combine: the bodies of several files, with their names.
+    both = geo.combine([("a", poly(*a)), ("b", poly(*mc.join(face, far))),
+                        ("c", named)])
+    check("combine: the names of the files and of the bodies",
+          geo.body_names(both) == ["a", "b", "wing", "fin"],
+          geo.body_names(both))
+    # save_bodies: a file for each body, the names without the stem.
+    split, _info = geo.split_parts(poly(*mc.join(a, far)), "box")
+    folder = os.path.dirname(path)
+    files = geo.body_file_names(split, os.path.join(folder, "out.stl"), "box")
+    check("save_bodies: file names", [f.name for f in files]
+          == ["out_1.stl", "out_2.stl"], [f.name for f in files])
+    done = geo.save_bodies(split, os.path.join(folder, "out.3mf"),
+                           unit_m=0.001, source_stem="box")
+    back = [geo.load_surface(str(f)) for f, _i, _b in done]
+    check("save_bodies: 2 files, 12 triangles each, the body names",
+          len(done) == 2 and all(m.n_cells == 12 for m in back)
+          and geo.body_names(back[0]) == ["box_1"],
+          [(str(f), m.n_cells, geo.body_names(m))
+           for (f, _i, _b), m in zip(done, back)])
+    odd = geo.join_bodies([("a:b", poly(*a)), ("a:b", poly(*far)),
+                           ("", poly(*face))])
+    names = [f.name for f in geo.body_file_names(odd, "x/m.obj")]
+    check("save_bodies: bad characters, equal names, no name",
+          names == ["m_a_b.obj", "m_a_b_2.obj", "m_3.obj"], names)
+
+
 def _write(path, text, mode="w"):
     with open(path, mode, **({} if "b" in mode else {"newline": "\n"})) as f:
         f.write(text)
@@ -597,6 +662,7 @@ def main():
         part_methods()
         part_language()
         part_steps()
+        part_split()
         part_formats()
         if "--big" in sys.argv:
             part_big(sys.argv[sys.argv.index("--big") + 1])

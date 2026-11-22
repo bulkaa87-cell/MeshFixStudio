@@ -36,6 +36,22 @@ problems in 3D, repair it, and export it in one of these formats.
   bodies. The repair repairs each body alone. The export keeps them as
   objects in 3MF, OBJ, ASCII STL, glTF and VTK; the other formats get one
   merged body.
+- Split: «Split» (Ctrl+P) makes each separate part of a body into a body
+  of its own, with a colour of its own in the 3D view. Solids that only
+  touch (on a face, an edge or a vertex) also become separate bodies, as in
+  Bambu Studio (Blender keeps them as one object). A cavity stays in the
+  body around it. The parts get the name of the file with _1, _2, ...
+- Several files: open (or drop) more than one file, or add files with
+  File › Add… (Ctrl+Shift+O). Each file becomes a body with the name of the
+  file (a file with objects gives a body for each object). A file without
+  a unit gets the units of the first file. Each body has a colour of its
+  own in the 3D view.
+- Bodies to export: a section under the log (closed at the start) lists
+  the bodies with the colour of the 3D view and a check box (on by
+  default). The export writes only the checked bodies. With «A file for
+  each body», each checked body goes to a file of its own:
+  <name>_<body>.<extension> in the selected folder. The program checks
+  each written file.
 - STL-safe output: STL and glTF keep float32 coordinates, and an STL reader
   joins points at the same place. Before such an export, the program moves
   the points that the rounding would join or make into a flat triangle, by

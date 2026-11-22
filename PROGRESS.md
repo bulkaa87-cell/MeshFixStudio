@@ -163,6 +163,13 @@ keep it as a changelog.
 17. Version 0.3.1 (wip/t12b-folded2): B is on by default
     (RepairOptions::fold_line_angle = 1e-4; MESHFIX_FOLD_VERTS=0 turns it
     off). A1 and A2 stay off. The owner selected B (2026-11-12).
+18. Release v0.4.0 (2026-11-22): «Split» (crates/meshfix/src/split.rs,
+    touching solids become separate bodies; the case was a box and a lid
+    that touch on 9 faces, 63 edges with 4 faces), open and add more than
+    one file, «Bodies to export» (check boxes, viewport colours, a file for
+    each body). Tests: cargo 62, test_core.py and test_app.py 0 problems.
+    OpenFOAM Studio has the core functions after it moves its pin; it has
+    no button for them yet.
 
 ## Next
 

@@ -1285,3 +1285,54 @@ fn fold_line_vertices_go_without_a_change_of_the_shape() {
     assert!(n < 3, "{n}");
     assert!(b.vertices.iter().any(|p| (p[2] - 0.01).abs() < 1e-12));
 }
+
+// ------------------------------------------------------------------ split
+
+fn split_of(m: &Mesh) -> split::Split {
+    split::split_parts(&m.vertices, &m.triangles)
+}
+
+#[test]
+fn split_one_cube_is_one_part() {
+    let s = split_of(&cube(1.0, [0.0; 3]));
+    assert_eq!(s.n_parts, 1);
+    assert!(s.labels.iter().all(|&l| l == 0));
+}
+
+#[test]
+fn split_cubes_that_touch_on_a_face() {
+    // The faces at x = 1 lie on each other: 4 faces on each edge there.
+    let a = cube(1.0, [0.0; 3]);
+    let m = join(&a, &cube(1.0, [1.0, 0.0, 0.0]));
+    let s = split_of(&m);
+    assert!(s.shared_edges > 0);
+    assert_eq!(s.n_parts, 2);
+    let n = a.triangles.len();
+    assert!(s.labels[..n].iter().all(|&l| l == s.labels[0]));
+    assert!(s.labels[n..].iter().all(|&l| l == s.labels[n]));
+    assert_ne!(s.labels[0], s.labels[n]);
+    // The same result for a triangle soup (no shared vertices).
+    assert_eq!(split_of(&soup(&m)).n_parts, 2);
+}
+
+#[test]
+fn split_cubes_that_touch_on_an_edge_or_a_vertex() {
+    let a = cube(1.0, [0.0; 3]);
+    assert_eq!(split_of(&join(&a, &cube(1.0, [1.0, 1.0, 0.0]))).n_parts, 2);
+    assert_eq!(split_of(&join(&a, &cube(1.0, [1.0, 1.0, 1.0]))).n_parts, 2);
+}
+
+#[test]
+fn split_keeps_a_cavity_with_its_shell() {
+    let outer = cube(3.0, [0.0; 3]);
+    let mut cavity = cube(1.0, [1.0; 3]);
+    for t in &mut cavity.triangles {
+        t.swap(1, 2);
+    }
+    let far = cube(1.0, [10.0, 0.0, 0.0]);
+    let s = split_of(&join(&join(&outer, &cavity), &far));
+    assert_eq!(s.n_parts, 2);
+    assert_eq!(s.cavities, 1);
+    assert!(s.labels[..24].iter().all(|&l| l == 0));
+    assert!(s.labels[24..].iter().all(|&l| l == 1));
+}

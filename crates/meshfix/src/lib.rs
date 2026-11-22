@@ -26,6 +26,7 @@ pub mod planar;
 mod py;
 pub mod rims;
 pub mod seal;
+pub mod split;
 pub mod stages;
 pub mod stlsafe;
 // Diagnosis on a mesh file: RUSTFLAGS="--cfg meshfix_debug" (file not in git).

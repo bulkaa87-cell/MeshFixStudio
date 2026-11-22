@@ -3,6 +3,24 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.4.0
+
+- «Split» (Ctrl+P): each separate part of a body becomes a body of its own,
+  with a colour of its own in the 3D view. Solids that touch on a face, an
+  edge or a vertex become separate bodies too: at an edge with four faces,
+  the faces are paired by their angle around the edge and their
+  orientation (crates/meshfix/src/split.rs). A cavity stays in the body
+  around it. Undo goes back. 3MF, OBJ, ASCII STL, glTF and VTK keep the
+  bodies apart.
+- Open more than one file at a time (the dialog or a drop), and File ›
+  Add… (Ctrl+Shift+O) to add files to the model. Each file is a body with
+  a colour of its own.
+- «Bodies to export» under the log (closed at the start): the bodies with
+  the colour of the 3D view and a check box. The export writes the
+  checked bodies, in one file or with «A file for each body» in a file
+  for each body (<name>_<body>.<extension>). Each file is checked after
+  the export.
+
 ## What is new in 0.3.1
 
 - Fewer folded faces (two neighbor triangles folded onto each other at

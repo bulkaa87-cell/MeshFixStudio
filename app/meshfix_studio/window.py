@@ -153,6 +153,17 @@ def _state_of(mesh) -> State:
                  geo.problem_layers(mesh, diag))
 
 
+# The colours of the bodies (soft, so the problem layers stay visible).
+BODY_COLORS = ("#9fb7d4", "#e0b07a", "#9fd0a4", "#d49fc4", "#d4cf8f",
+               "#8fcfd0", "#c4a88f", "#b0a4e0")
+
+
+def body_color(i: int, n: int) -> str:
+    """The colour of body i of n in the 3D view (one body: the usual
+    colour of the model)."""
+    return vp.COL_BODY if n <= 1 else BODY_COLORS[i % len(BODY_COLORS)]
+
+
 class MeshViewport(vp.Viewport):
     """The shared «3D» view, without the «All» button (there is only the
     model here)."""
@@ -162,6 +173,21 @@ class MeshViewport(vp.Viewport):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.to_model_requested.connect(self.fit_body)
+
+    def body_style(self, mesh) -> dict:
+        """One colour for each body when the mesh has more than one (for
+        example after «Split»). The list «Bodies to export» uses the same
+        colours (body_color)."""
+        if geo.BODY in mesh.cell_data:
+            ids = np.asarray(mesh.cell_data[geo.BODY])
+            n = int(ids.max()) + 1 if ids.size else 0
+            if n > 1:
+                k = min(n, 256)              # the size limit of the colour table
+                colors = [body_color(i, n) for i in range(k)]
+                return {"scalars": geo.BODY, "preference": "cell",
+                        "cmap": colors, "clim": (-0.5, n - 0.5),
+                        "n_colors": k, "show_scalar_bar": False}
+        return super().body_style(mesh)
 
 
 class MeshFixWindow(QtWidgets.QMainWindow):
@@ -181,6 +207,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.history: list[State] = []
         self.repaired: dict | None = None     # the last repair, for the info
         self.export_check = None              # Diagnosis of the written file
+        self.export_checks: list = []         # each file of the last export
         self.export_info = None               # meshfix.check.SaveInfo
         self.unit_given = False               # the file gives its unit
         self._spots: list = []
@@ -212,7 +239,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.btn_open = QtWidgets.QPushButton("Open…")
         self.btn_open.setToolTip("Open a mesh file: STL, 3MF, OBJ, PLY, OFF, "
                                  "glTF, VTP, VTK. You can also drop a file "
-                                 "on the window.")
+                                 "on the window. Several files become one "
+                                 "model with a body for each file.")
         self.btn_open.clicked.connect(self.open_dialog)
         bar.addWidget(self.btn_open)
         bar.addSeparator()
@@ -242,6 +270,15 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.btn_repair.setToolTip("Repair the mesh with the selected method")
         self.btn_repair.clicked.connect(lambda _=False: self.repair())
         bar.addWidget(self.btn_repair)
+        self.btn_split = QtWidgets.QPushButton("Split")
+        self.btn_split.setToolTip(
+            "Split each body into its separate parts: each part becomes a "
+            "body of its own. Solids that only touch (on a face, an edge or "
+            "a vertex) become separate bodies too. A cavity stays in the "
+            "body around it. 3MF, OBJ, ASCII STL, glTF and VTK keep the "
+            "bodies apart.")
+        self.btn_split.clicked.connect(lambda _=False: self.split_parts())
+        bar.addWidget(self.btn_split)
         bar.addSeparator()
 
         self.btn_export = QtWidgets.QPushButton("Export…")
@@ -338,14 +375,119 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.log.setReadOnly(True)
         self.log.setMaximumBlockCount(500)
         lay.addWidget(self.log, 1)
+        lay.addWidget(self._build_bodies())
         box.setMinimumWidth(300)
         return box
+
+    def _build_bodies(self) -> QtWidgets.QWidget:
+        """The section «Bodies to export»: a list of the bodies with the
+        colour of the 3D view and a check box (on by default). Only the
+        bodies with a check go to the export. Closed at the start."""
+        box = QtWidgets.QWidget()
+        lay = QtWidgets.QVBoxLayout(box)
+        lay.setContentsMargins(0, 6, 0, 0)
+        row = QtWidgets.QHBoxLayout()
+        self.btn_bodies = QtWidgets.QPushButton("Bodies to export")
+        self.btn_bodies.setObjectName("bodies_toggle")
+        self.btn_bodies.setCheckable(True)
+        self.btn_bodies.setChecked(False)
+        self.btn_bodies.setFlat(True)
+        self.btn_bodies.setStyleSheet("text-align:left; font-weight:bold;")
+        self.btn_bodies.toggled.connect(self._bodies_toggled)
+        row.addWidget(self.btn_bodies, 1)
+        self.lbl_bodies = QtWidgets.QLabel("")
+        row.addWidget(self.lbl_bodies)
+        lay.addLayout(row)
+        self.bodies_panel = QtWidgets.QWidget()
+        inner = QtWidgets.QVBoxLayout(self.bodies_panel)
+        inner.setContentsMargins(0, 0, 0, 0)
+        self.lst_bodies = QtWidgets.QListWidget()
+        self.lst_bodies.setMaximumHeight(200)
+        self.lst_bodies.itemChanged.connect(lambda _i: self._bodies_changed())
+        inner.addWidget(self.lst_bodies)
+        self.chk_each = QtWidgets.QCheckBox("A file for each body")
+        self.chk_each.setToolTip(
+            "Export each selected body to a file of its own: "
+            "<name>_<body>.<extension> in the selected folder. Without a "
+            "check: one file with all selected bodies.")
+        inner.addWidget(self.chk_each)
+        lay.addWidget(self.bodies_panel)
+        self.bodies_panel.setVisible(False)
+        self._unchecked: set = set()       # names of bodies without a check
+        self._bodies_toggled(False)
+        return box
+
+    def _bodies_toggled(self, shown: bool):
+        style = self.style()
+        icon = (QtWidgets.QStyle.SP_ArrowDown if shown
+                else QtWidgets.QStyle.SP_ArrowRight)
+        self.btn_bodies.setIcon(style.standardIcon(icon))
+        self.bodies_panel.setVisible(shown)
+
+    def _fill_bodies(self):
+        """The list of the bodies of the current mesh. A body keeps its
+        check when the next mesh has a body with the same name."""
+        lst = self.lst_bodies
+        lst.blockSignals(True)
+        lst.clear()
+        names = (geo.body_names(self.state.mesh) if self.state is not None
+                 else [])
+        if self.state is not None and not names:
+            names = [self.path.stem if self.path else tr("Model")]
+        n = len(names)
+        for i, name in enumerate(names):
+            item = QtWidgets.QListWidgetItem()
+            item.setText(name)
+            pix = QtGui.QPixmap(14, 14)
+            pix.fill(QtGui.QColor(body_color(i, n)))
+            item.setIcon(QtGui.QIcon(pix))
+            item.setFlags(item.flags() | QtCore.Qt.ItemIsUserCheckable)
+            item.setCheckState(QtCore.Qt.Unchecked if name in self._unchecked
+                               else QtCore.Qt.Checked)
+            lst.addItem(item)
+        lst.blockSignals(False)
+        self._bodies_changed()
+
+    def _bodies_changed(self):
+        lst = self.lst_bodies
+        names = [lst.item(i).text() for i in range(lst.count())]
+        on = self.export_selection()
+        self._unchecked = {nm for i, nm in enumerate(names) if i not in on}
+        self.lbl_bodies.setText(f"{len(on)} / {len(names)}" if names else "")
+        self.chk_each.setEnabled(len(on) > 1)
+        self._sync()
+
+    def export_selection(self) -> list:
+        """The indices of the bodies with a check."""
+        lst = self.lst_bodies
+        return [i for i in range(lst.count())
+                if lst.item(i).checkState() == QtCore.Qt.Checked]
+
+    def export_mesh(self):
+        """The mesh that the export writes: the bodies with a check (the
+        whole mesh when all have a check), or None when no body has one."""
+        if self.state is None:
+            return None
+        mesh = self.state.mesh
+        on = self.export_selection()
+        bodies = geo.split_bodies(mesh)
+        if len(on) == len(bodies) or self.lst_bodies.count() == 0:
+            return mesh
+        if not on:
+            return None
+        names = geo.body_names(mesh)
+        out = geo.join_bodies([(names[i], bodies[i][1]) for i in on])
+        if geo.UNIT in mesh.field_data:
+            out.field_data[geo.UNIT] = np.asarray(mesh.field_data[geo.UNIT])
+        return out
 
     def _build_menu(self):
         mb = self.menuBar()
         m = mb.addMenu("&File")
         self.act_open = m.addAction("Open…", self.open_dialog)
         self.act_open.setShortcut(QtGui.QKeySequence.Open)
+        self.act_add = m.addAction("Add…", self.add_dialog)
+        self.act_add.setShortcut(QtGui.QKeySequence("Ctrl+Shift+O"))
         self.act_export = m.addAction("Export…", self.export_dialog)
         self.act_export.setShortcut(QtGui.QKeySequence("Ctrl+E"))
         m.addSeparator()
@@ -354,6 +496,9 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         m = mb.addMenu("&Edit")
         self.act_repair = m.addAction("Repair", lambda: self.repair())
         self.act_repair.setShortcut(QtGui.QKeySequence("Ctrl+R"))
+        self.act_split = m.addAction("Split into Parts",
+                                     lambda: self.split_parts())
+        self.act_split.setShortcut(QtGui.QKeySequence("Ctrl+P"))
         self.act_undo = m.addAction("Undo", self.undo)
         self.act_undo.setShortcut(QtGui.QKeySequence.Undo)
         self.act_reset = m.addAction("Reset", self.reset)
@@ -442,11 +587,16 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.cmb_units.setEnabled(idle and has)
         self.cmb_method.setEnabled(idle)
         self.btn_repair.setEnabled(idle and has and can_fix)
-        self.btn_export.setEnabled(idle and has)
+        self.btn_split.setEnabled(idle and has)
+        self.btn_export.setEnabled(idle and has and (
+            not hasattr(self, "lst_bodies") or self.lst_bodies.count() == 0
+            or bool(self.export_selection())))
         self.btn_undo.setEnabled(idle and bool(self.history))
         self.btn_reset.setEnabled(idle and has and self.state is not self.loaded)
         if hasattr(self, "act_repair"):
             self.act_repair.setEnabled(self.btn_repair.isEnabled())
+            self.act_split.setEnabled(self.btn_split.isEnabled())
+            self.act_add.setEnabled(idle and has)
             self.act_export.setEnabled(self.btn_export.isEnabled())
             self.act_undo.setEnabled(self.btn_undo.isEnabled())
             self.act_reset.setEnabled(self.btn_reset.isEnabled())
@@ -519,7 +669,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             return
         self._say("")
         self._note(tr("Failed: {message}", message=message))
-        title = tr("Open failed") if job == "load" else tr("Repair failed")
+        title = {"load": tr("Open failed"),
+                 "split": tr("Split failed")}.get(job, tr("Repair failed"))
         QtWidgets.QMessageBox.critical(self, title, message)
 
     @QtCore.Slot(object)
@@ -532,41 +683,102 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             self._loaded(result)
         elif job == "repair":
             self._repaired(result)
+        elif job == "split":
+            self._split_done(result)
         elif job == "units":
             self._units_done(result)
         elif job == "check":
             self._export_checked(result)
 
     # ------------------------------------------------------------------ open
+    def _pick_files(self, title: str) -> list:
+        start = self.store.value("folder", str(Path.home()))
+        paths, _ = QtWidgets.QFileDialog.getOpenFileNames(
+            self, title, start, geo.open_filter())
+        return paths
+
     def open_dialog(self):
+        """Open one or more mesh files. Several files become one model:
+        each file is a body (or more, when the file has objects)."""
         if self.busy_now:
             return
-        start = self.store.value("folder", str(Path.home()))
-        path, _ = QtWidgets.QFileDialog.getOpenFileName(
-            self, tr("Open a mesh"), start, geo.open_filter())
-        if path:
-            self.open_file(path)
+        paths = self._pick_files(tr("Open a mesh"))
+        if paths:
+            self.open_files(paths)
+
+    def add_dialog(self):
+        """Add mesh files to the open model, as more bodies."""
+        if self.busy_now or self.state is None:
+            return
+        paths = self._pick_files(tr("Add a mesh"))
+        if paths:
+            self.add_files(paths)
 
     def open_file(self, path) -> bool:
         """Read a mesh file in the worker thread."""
-        path = Path(path)
-        if self.busy_now or not path.is_file():
+        return self.open_files([path])
+
+    def open_files(self, paths) -> bool:
+        """Read one or more mesh files in the worker thread. The first file
+        sets the units (guessed from its size, or the unit of a 3MF or
+        glTF file). The other files without a unit get the same units."""
+        return self._read_files(paths, add=False)
+
+    def add_files(self, paths) -> bool:
+        """Read mesh files and add them to the model as more bodies (one
+        step: Undo removes them). A file without a unit gets the units of
+        the model."""
+        if self.state is None:
             return False
-        self.store.setValue("folder", str(path.parent))
+        return self._read_files(paths, add=True)
+
+    def _read_files(self, paths, add: bool) -> bool:
+        paths = [Path(p) for p in paths]
+        if self.busy_now or not paths or not all(p.is_file() for p in paths):
+            return False
+        self.store.setValue("folder", str(paths[0].parent))
+        base = self.state.mesh if add else None
+        base_factor = self.factor if add else None
+        stem = self.path.stem if self.path else ""
 
         def job(_meshes, say):
-            say(tr("Reading {name}…", name=path.name))
-            raw = geo.load_surface(str(path))
-            factor, note = geo.guess_scale(raw)
-            given = geo.UNIT in raw.field_data
-            mesh = geo.apply_scale(raw, factor)
-            say(tr("Checking {name}…", name=path.name))
-            return path, factor, (note, given), _state_of(mesh)
-        return self._start("load", job, tr("Reading {name}…", name=path.name))
+            items, factor, note, given = [], base_factor, "", False
+            for path in paths:
+                say(tr("Reading {name}…", name=path.name))
+                raw = geo.load_surface(str(path))
+                f, why = geo.guess_scale(raw)
+                has_unit = geo.UNIT in raw.field_data
+                if factor is None:
+                    factor, note, given = f, why, has_unit
+                elif not has_unit:
+                    f = factor
+                items.append((path.stem, geo.apply_scale(raw, f)))
+            if base is not None:
+                items.insert(0, (stem, base))
+            mesh = (items[0][1] if len(items) == 1
+                    else geo.combine(items))
+            say(tr("Checking {name}…", name=paths[-1].name))
+            return paths, factor, (note, given), _state_of(mesh), add
+        name = (paths[0].name if len(paths) == 1
+                else tr("{n} files", n=len(paths)))
+        return self._start("load", job, tr("Reading {name}…", name=name))
 
     def _loaded(self, result):
-        path, factor, (note, given), state = result
-        self.path = path
+        paths, factor, (note, given), state, add = result
+        names = ", ".join(p.name for p in paths)
+        if add:
+            self._push(self.state)
+            self.state = state
+            self.repaired = None
+            self._show(reset_camera=True)
+            text = tr("Added {names}: {n} bodies", names=names,
+                      n=_num(geo.body_count(state.mesh)))
+            self._note(text)
+            self._say(text)
+            self._sync()
+            return
+        self.path = paths[0]
+        self._unchecked = set()
         self.factor = factor
         self.unit_note = note
         self.unit_given = given
@@ -576,9 +788,12 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._select_units(factor)
         self._update_title()
         self._show(reset_camera=True)
-        self._note(tr("Opened {name}: {n} triangles", name=path.name,
+        self._note(tr("Opened {name}: {n} triangles", name=names,
                       n=_num(state.diag.n_triangles)))
-        self._say(tr("Opened {name}", name=path.name))
+        if len(paths) > 1:
+            self._note(tr("{n} files, {b} bodies", n=len(paths),
+                          b=_num(geo.body_count(state.mesh))))
+        self._say(tr("Opened {name}", name=names))
         self._sync()
 
     def _select_units(self, factor: float):
@@ -669,6 +884,43 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             self._note(tr("Triangles: {a} → {b}", a=_num(d0.n_triangles),
                           b=_num(d1.n_triangles)))
 
+    # ----------------------------------------------------------------- split
+    def split_parts(self) -> bool:
+        """Split each body into its separate parts (meshfix.formats
+        .split_parts), in the worker thread. Undo goes back."""
+        if self.state is None or self.busy_now:
+            return False
+        before = self.state
+        stem = self.path.stem if self.path else ""
+
+        def job(_meshes, say):
+            mesh, info = geo.split_parts(before.mesh, stem)
+            if mesh is before.mesh:
+                return info, None
+            say(tr("Checking the result…"))
+            return info, _state_of(mesh)
+        self._note(tr("Split into parts"))
+        return self._start("split", job, tr("Splitting into parts…"))
+
+    def _split_done(self, result):
+        info, state = result
+        if state is None:
+            text = tr("Nothing to split: each body is one part")
+            self._say(text)
+            self._note(text)
+            return
+        self._push(self.state)
+        self.state = state
+        self.repaired = None
+        self._show(reset_camera=False)
+        text = tr("Split: {a} → {b} bodies", a=_num(info.bodies_before),
+                  b=_num(info.bodies_after))
+        self._say(text)
+        self._note(text)
+        if info.cavities:
+            self._note(tr("Cavities kept in their bodies: {n}",
+                          n=_num(info.cavities)))
+
     def _push(self, state: State):
         self.history.append(state)
         del self.history[:-HISTORY]
@@ -707,7 +959,14 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         key = str(self.store.value("export_format", "stl") or "stl")
         if key not in geo.FORMATS:
             key = "stl"
-        filters = geo.export_filters(geo.body_count(self.state.mesh))
+        mesh = self.export_mesh()
+        if mesh is None:
+            self._say(tr("No body to export: check a body in «Bodies to "
+                         "export»"))
+            return
+        n = geo.body_count(mesh)
+        each = n > 1 and self.chk_each.isChecked()
+        filters = geo.export_filters(1 if each else n)
         texts = [text for _k, text in filters]
         chosen = dict(filters)[key]
         path, picked = QtWidgets.QFileDialog.getSaveFileName(
@@ -716,7 +975,69 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             ";;".join(texts), chosen)
         if path:
             keys = [k for k, text in filters if text == picked]
-            self.export_file(path, keys[0] if keys else None)
+            fmt = keys[0] if keys else None
+            if each:
+                self.export_bodies(path, fmt)
+            else:
+                self.export_file(path, fmt)
+
+    def export_bodies(self, path, fmt: str | None = None) -> list:
+        """Write each body to a file of its own: <name>_<body><suffix> in
+        the folder of `path` (meshfix.check.save_bodies). Files that are
+        there already: one question. Returns the paths ([] on an error or
+        a cancel)."""
+        mesh = self.export_mesh()
+        if mesh is None:
+            return []
+        path = Path(path)
+        if path.suffix.lower() not in geo.READERS:
+            path = Path(str(path) + geo.FORMATS[fmt or "stl"].suffix)
+        source = self.path.stem if self.path else ""
+        files = geo.body_file_names(mesh, path, source)
+        there = [f for f in files if f.exists()]
+        if there:
+            answer = QtWidgets.QMessageBox.question(
+                self, tr("Export"),
+                tr("{n} of the files are there already ({first}, ...). "
+                   "Replace them?", n=len(there), first=there[0].name))
+            if answer != QtWidgets.QMessageBox.Yes:
+                return []
+        try:
+            form = geo.format_for(path, fmt)
+            done = geo.save_bodies(mesh, path, form,
+                                   unit_m=self.factor, source_stem=source)
+        except Exception as exc:                          # noqa: BLE001
+            QtWidgets.QMessageBox.critical(self, tr("Export failed"), str(exc))
+            return []
+        self.store.setValue("export_folder", str(path.parent))
+        self.store.setValue("export_format", form.key)
+        self.export_info = done[-1][1] if done else None
+        text = tr("Exported {n} files ({format}, {units}) to {folder}",
+                  n=len(done), format=geo.format_label(form),
+                  units=done[0][1].unit if done else "",
+                  folder=str(path.parent))
+        self._say(text)
+        self._note(text)
+        for file, _info, body in done:
+            self._note(tr("  {name}: {n} triangles", name=file.name,
+                          n=_num(body.n_cells)))
+        self._check_exports([(file, body) for file, _i, body in done])
+        return [file for file, _i, _b in done]
+
+    def _check_exports(self, items):
+        """Read each written body file again and check it against its body
+        (worker thread). The result: the same as _check_export."""
+        self.export_check = None
+
+        def job(_meshes, say):
+            out = []
+            for file, body in items:
+                say(tr("Checking {name}…", name=file.name))
+                out.append((file, geo.diagnose(body),
+                            geo.diagnose(geo.load_surface(str(file)))))
+            return out
+        self._start("check", job, tr("Checking {name}…",
+                                     name=tr("{n} files", n=len(items))))
 
     def export_file(self, path, fmt: str | None = None) -> Path | None:
         """Write the current mesh to `path`. The format: `fmt` (a key of
@@ -726,15 +1047,15 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         binary STL). A format without a unit is written in the units of
         the input file. Returns the path, or None on an error (a message
         box)."""
-        if self.state is None:
+        mesh = self.export_mesh()
+        if mesh is None:
             return None
         path = Path(path)
         if path.suffix.lower() not in geo.READERS:
             path = Path(str(path) + geo.FORMATS[fmt or "stl"].suffix)
         try:
             form = geo.format_for(path, fmt)
-            info = geo.save_mesh(self.state.mesh, path, form,
-                                 unit_m=self.factor)
+            info = geo.save_mesh(mesh, path, form, unit_m=self.factor)
         except Exception as exc:                          # noqa: BLE001
             QtWidgets.QMessageBox.critical(self, tr("Export failed"), str(exc))
             return None
@@ -743,7 +1064,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.export_info = info
         text = tr("Exported {name} ({format}, {n} triangles, {units})",
                   name=path.name, format=geo.format_label(form),
-                  n=_num(self.state.diag.n_triangles), units=info.unit)
+                  n=_num(mesh.n_cells), units=info.unit)
         self._say(text)
         self._note(text)
         self._note(geo.save_note(info))
@@ -754,10 +1075,10 @@ class MeshFixWindow(QtWidgets.QMainWindow):
                           "up to {d} {units})", n=_num(moved),
                           d=f"{info.stl_safe.get('max_move', 0):.2g}",
                           units=info.unit))
-        self._check_export(path)
+        self._check_export(path, None if mesh is self.state.mesh else mesh)
         return path
 
-    def _check_export(self, path: Path):
+    def _check_export(self, path: Path, part=None):
         """Read the written file again and check it (worker thread).
 
         STL keeps float32 coordinates and no topology: a reader joins equal
@@ -772,10 +1093,23 @@ class MeshFixWindow(QtWidgets.QMainWindow):
 
         def job(_meshes, say):
             say(tr("Checking {name}…", name=path.name))
-            return path, want, geo.diagnose(geo.load_surface(str(path)))
+            ref = want if part is None else geo.diagnose(part)
+            return [(path, ref, geo.diagnose(geo.load_surface(str(path))))]
         self._start("check", job, tr("Checking {name}…", name=path.name))
 
-    def _export_checked(self, result):
+    def _export_checked(self, results):
+        """The check of the written files. One warning box for all files
+        with a problem (each problem is also in the log)."""
+        self.export_checks = [got for _p, _w, got in results]
+        bad = [text for text in map(self._export_checked_one, results)
+               if text]
+        if bad:
+            more = (tr("\n\n{n} more files have problems (see the log).",
+                       n=len(bad) - 1) if len(bad) > 1 else "")
+            QtWidgets.QMessageBox.warning(self, "Export check", bad[0] + more)
+
+    def _export_checked_one(self, result) -> str:
+        """Log the check of one file. Returns the warning text, or ""."""
         path, want, got = result
         self.export_check = got
         lost = [(label, fs_repair.counts(want)[attr], fs_repair.counts(got)[attr])
@@ -787,7 +1121,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             text = tr("Check of {name}: the same as the mesh", name=path.name)
             self._say(text)
             self._note(text)
-            return
+            return ""
         parts = ", ".join(f"{tr(label)} {_num(a)} → {_num(b)}"
                           for label, a, b in lost)
         if path.suffix.lower() == ".stl":
@@ -802,7 +1136,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._say(tr("Check of {name}: the file has problems",
                      name=path.name))
         self._note(text)
-        QtWidgets.QMessageBox.warning(self, "Export check", text)
+        return text
 
     # ------------------------------------------------------------ the 3D view
     def _show(self, reset_camera: bool):
@@ -810,6 +1144,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         v = self.view
         v.clear_problems()
         self._spots, self._spot_at = [], -1
+        self._fill_bodies()
         if st is None:
             v.show_body(None)
             self._refresh_info()
@@ -935,14 +1270,16 @@ class MeshFixWindow(QtWidgets.QMainWindow):
     # ------------------------------------------------------- drag and drop
     @staticmethod
     def _dropped_file(event) -> str | None:
+        files = MeshFixWindow._dropped_files(event)
+        return files[0] if files else None
+
+    @staticmethod
+    def _dropped_files(event) -> list:
         md = event.mimeData()
         if not md.hasUrls():
-            return None
-        for url in md.urls():
-            p = url.toLocalFile()
-            if p and Path(p).suffix.lower() in SUFFIXES:
-                return p
-        return None
+            return []
+        return [p for p in (url.toLocalFile() for url in md.urls())
+                if p and Path(p).suffix.lower() in SUFFIXES]
 
     def dragEnterEvent(self, event):                      # noqa: N802
         if not self.busy_now and self._dropped_file(event):
@@ -954,8 +1291,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.dragEnterEvent(event)
 
     def dropEvent(self, event):                           # noqa: N802
-        path = self._dropped_file(event)
-        if path and self.open_file(path):
+        paths = self._dropped_files(event)
+        if paths and self.open_files(paths):
             event.acceptProposedAction()
 
     # ------------------------------------------------------------------ close
