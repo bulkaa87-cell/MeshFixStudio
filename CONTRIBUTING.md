@@ -47,6 +47,18 @@ or `app/meshfix_studio/i18n/uk/`. Use `tr("Cells: {n}", n=cells)` for a
 text with values, not an f-string. The module docstring of
 `meshfix/i18n.py` tells the rules.
 
+## Progress bars
+
+Each load and each download MUST show a progress bar (rule of the owner,
+2026-11-23). It applies to each new feature and to each release.
+
+- A known size (a download, a list of files or bodies): a determinate bar
+  with the percent.
+- No measure (a reader of a mesh file, a repair step): a busy bar with the
+  name of the step and the seconds (`MeshFixWindow._tick`). Never a silent
+  wait.
+- Before a release, examine each new load or download for its bar.
+
 ## Tests
 
 Run these before a pull request:
