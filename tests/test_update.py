@@ -115,15 +115,18 @@ def main():
     check("progress text: MB of MB and the speed",
           "50.0" in text and "200.0" in text and "5.0" in text, text)
 
-    print("4. installer arguments")
-    pf = os.environ.get("ProgramFiles", r"C:\Program Files")
-    a = up.installer_args(os.path.join(pf, "MeshFix Studio"), "uk", 1234)
-    check("silent, wait, start again, Ukrainian, all users",
-          {"/SILENT", "/WAITPID=1234", "/RELAUNCH=1", "/LANG=uk",
-           "/ALLUSERS"} <= set(a), a)
-    a = up.installer_args(os.path.join(tempfile.gettempdir(), "MF"), "en", 1)
-    check("a user folder: this user only, English",
-          "/CURRENTUSER" in a and "/LANG=en" in a and "/ALLUSERS" not in a, a)
+    print("4. installer arguments (Windows)")
+    if sys.platform == "win32":
+        pf = os.environ.get("ProgramFiles", r"C:\Program Files")
+        a = up.installer_args(os.path.join(pf, "MeshFix Studio"), "uk", 1234)
+        check("silent, wait, start again, Ukrainian, all users",
+              {"/SILENT", "/WAITPID=1234", "/RELAUNCH=1", "/LANG=uk",
+               "/ALLUSERS"} <= set(a), a)
+        a = up.installer_args(os.path.join(tempfile.gettempdir(), "MF"),
+                              "en", 1)
+        check("a user folder: this user only, English",
+              "/CURRENTUSER" in a and "/LANG=en" in a
+              and "/ALLUSERS" not in a, a)
 
     print("5. the badge")
     win = QtWidgets.QMainWindow()
