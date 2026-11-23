@@ -15,6 +15,9 @@
    units of 3MF and glTF.
 8. Files of other programs: OBJ groups, PLY and OFF variants, ASCII STL
    names, a 3MF with components in other model files, a glTF node tree.
+8b. STEP (meshfix.cad, when OCP is installed): two named solids, closed,
+   the volumes, the unit, the detail levels, the percent, a bad file,
+   STEP -> STL/3MF.
 9. With --big FOLDER: each *.stl of FOLDER (use copies), repaired, in each
    format.
 
@@ -264,7 +267,8 @@ def part_steps():
     # The file format tables: the readers and the writers.
     check("readers", set(geo.READERS) >= {".stl", ".obj", ".ply"},
           sorted(geo.READERS))
-    check("writers: one for each reader", set(geo.WRITERS) == set(geo.READERS),
+    check("writers: one for each reader (not CAD)",
+          set(geo.WRITERS) == set(geo.READERS) - set(geo.CAD_READERS),
           sorted(geo.WRITERS))
     import tempfile
     p, t = mc.cube()
@@ -308,8 +312,8 @@ def part_formats():
           geo.EXPORT_FORMATS)
     check("the readers", set(geo.READERS) == {".stl", ".3mf", ".obj", ".ply",
                                               ".off", ".glb", ".gltf",
-                                              ".vtp", ".vtk"},
-          sorted(geo.READERS))
+                                              ".vtp", ".vtk"}
+          | set(geo.CAD_READERS), sorted(geo.READERS))
     check("format_for: suffix, filter, other suffix",
           geo.format_for("a.STL").key == "stl"
           and geo.format_for("a.stl", "stl_ascii").key == "stl_ascii"
@@ -626,6 +630,66 @@ def part_foreign(tmp):
           and length == os.path.getsize(path))
 
 
+def part_step():
+    print("8b. STEP files (meshfix.cad)")
+    from meshfix import cad
+    from meshfix import formats as fm
+    if not cad.available():
+        # The core works without OCP; CI installs it (requirements).
+        print("  skip: OCP (cadquery-ocp-novtk) is not installed")
+        check("STEP: not in the readers without OCP",
+              not geo.CAD_READERS and ".step" not in geo.READERS)
+        return
+    import tempfile
+    from make_step import BLOCK_VOLUME, PIN_VOLUME, make_step
+    tmp = tempfile.mkdtemp(prefix="meshfix_step_")
+    path = make_step(os.path.join(tmp, "two.step"))
+    check("STEP: .step and .stp are readers",
+          {".step", ".stp"} <= set(geo.READERS))
+    check("STEP: in the open filter", "*.step" in geo.open_filter())
+    seen = []
+    mesh = geo.load_surface(path, progress=lambda t, f=None: seen.append(f))
+    fracs = [f for f in seen if f is not None]
+    check("STEP: the percent goes up to 1", fracs and fracs[-1] == 1.0
+          and fracs == sorted(fracs), fracs[:3])
+    check("STEP: two bodies with the names", fm.body_names(mesh)
+          == ["block", "pin"], fm.body_names(mesh))
+    check("STEP: the unit is mm", float(mesh.field_data[fm.UNIT][0]) == 0.001)
+    d = geo.diagnose(mesh)
+    check("STEP: closed, no flipped or bad faces",
+          (d.open_edges, d.non_manifold_edges, d.flipped_faces,
+           d.degenerate, d.inverted_parts) == (0, 0, 0, 0, 0), rt(d))
+    vols = [geo.diagnose(m).volume for _n, m in fm.split_bodies(mesh)]
+    check("STEP: the box volume (exact)", abs(vols[0] - BLOCK_VOLUME) < 1e-6,
+          vols)
+    check("STEP: the pin volume (within 1 %)",
+          abs(vols[1] - PIN_VOLUME) / PIN_VOLUME < 0.01, vols)
+    counts = {}
+    for key in ("coarse", "very_fine"):
+        data = cad.read_step(path, level=key)
+        counts[key] = sum(len(p.tris) for p in data.parts)
+    check("STEP: finer detail, more triangles",
+          counts["very_fine"] > counts["coarse"], counts)
+    # STEP -> each mesh format: the same two bodies come back.
+    for key in ("stl_ascii", "3mf", "obj"):
+        out = os.path.join(tmp, "two" + geo.FORMATS[key].suffix)
+        geo.write_mesh(geo.apply_scale(mesh, 0.001), out, key)
+        raw, back = read_back(out, geo.FORMATS[key], 0.001)
+        check(f"STEP -> {key}: two bodies, closed",
+              fm.body_count(back) == 2
+              and geo.diagnose(back).open_edges == 0,
+              (fm.body_count(back), rt(geo.diagnose(back))))
+    bad = os.path.join(tmp, "bad.stp")
+    with open(bad, "w") as f:
+        f.write("not a step file" + chr(10))
+    try:
+        geo.load_surface(bad)
+        check("STEP: a bad file gives an error", False)
+    except RuntimeError as exc:
+        check("STEP: a bad file gives an error", "bad.stp" in str(exc),
+              str(exc))
+
+
 def part_big(folder):
     """The large models (copies) in `folder`: repair, then each format."""
     print("9. large models: repair, each format, read again")
@@ -664,6 +728,7 @@ def main():
         part_steps()
         part_split()
         part_formats()
+        part_step()
         if "--big" in sys.argv:
             part_big(sys.argv[sys.argv.index("--big") + 1])
     except Exception:                                     # noqa: BLE001

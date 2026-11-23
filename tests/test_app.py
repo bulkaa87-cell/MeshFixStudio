@@ -14,6 +14,9 @@ export, and the close during a repair. The windows open off-screen
    the step «STL-safe output» only for STL and glTF), the format of the
    dialog filter, a 3MF with two bodies (each body repaired, the names
    kept, a merge said in the log).
+2c. STEP (when OCP is installed): open a STEP file with two solids, a
+   percent bar, the bodies and mm, File > STEP Detail reads it again,
+   export to STL.
 3. Close during a repair: in this process (the result is ignored, no
    error), and in a child process (it ends with exit code 0, without
    "QThread: Destroyed").
@@ -535,6 +538,52 @@ def part_split(win):
     check("undo of add: 2 bodies", geo.body_count(win.state.mesh) == 2)
 
 
+def part_step(win):
+    print("2c. STEP")
+    from meshfix import cad
+    from meshfix import formats as fm
+    if not cad.available():
+        print("  skip: OCP (cadquery-ocp-novtk) is not installed")
+        check("STEP: the detail menu is off without OCP",
+              not win.act_detail["normal"].parent().isEnabled())
+        return
+    from make_step import make_step
+    path = make_step(os.path.join(TMP, "two.step"))
+    values = []
+    win.busy.valueChanged.connect(values.append)
+    check("open the STEP file", win.open_file(path) and wait(win))
+    mesh = win.state.mesh
+    check("STEP: a percent bar (up to 100 %)", values and max(values) == 1000,
+          values[-3:])
+    check("STEP: the busy bar again after the read",
+          win.busy.maximum() == 0)
+    check("STEP: two bodies with the names", fm.body_names(mesh)
+          == ["block", "pin"], fm.body_names(mesh))
+    check("STEP: the units are mm", win.factor == 0.001, win.factor)
+    check("STEP: the detail in the log",
+          "STEP: detail «Normal»" in win.log.toPlainText())
+    normal = win.state.diag.n_triangles
+    win.set_detail("coarse")
+    check("STEP Detail > Coarse: read again", wait(win))
+    check("Coarse: fewer triangles", win.state.diag.n_triangles < normal,
+          (win.state.diag.n_triangles, normal))
+    check("Coarse: the setting", win.store.value("step_detail") == "coarse")
+    check("Coarse: the menu", win.act_detail["coarse"].isChecked())
+    win.set_detail("normal")
+    wait(win)
+    out = os.path.join(TMP, "two_from_step.stl")
+    written = win.export_file(out, "stl")
+    wait(win)
+    check("STEP -> STL: the file", written is not None and os.path.isfile(out),
+          written)
+    back = geo.load_surface(out)
+    check("STEP -> STL: closed, the triangles",
+          geo.diagnose(back).open_edges == 0
+          and back.n_cells == win.state.diag.n_triangles,
+          (back.n_cells, win.state.diag.n_triangles))
+    win.busy.valueChanged.disconnect(values.append)
+
+
 def main():
     t0 = time.time()
     try:
@@ -542,6 +591,7 @@ def main():
         part_small(win)
         part_formats(win)
         part_split(win)
+        part_step(win)
         win.close()
         pump(200)
         part_close()

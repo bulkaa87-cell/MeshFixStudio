@@ -4,7 +4,8 @@
 
 MeshFix Studio repairs triangle meshes: STL, 3MF, OBJ, PLY, OFF, glTF and
 VTK files from CAD, 3D scans and 3D printing. Open a mesh, see its
-problems in 3D, repair it, and export it in one of these formats.
+problems in 3D, repair it, and export it in one of these formats. It also
+opens STEP files of CAD programs and converts them to these mesh formats.
 
 - Problems in the 3D view: holes (open edges, red), flipped parts (magenta),
   non-manifold edges (yellow), degenerate triangles (green). «Next Problem»
@@ -32,6 +33,11 @@ problems in 3D, repair it, and export it in one of these formats.
   file. 3MF is always in mm (the unit of the slicers), glTF in m.
 - Formats (open and export): STL (binary and ASCII), 3MF, OBJ, PLY (binary
   and ASCII), OFF, glTF (.glb and .gltf), VTK (.vtp and legacy .vtk).
+- STEP (.step, .stp, open only): OpenCASCADE makes the triangles of the
+  exact surfaces. Each solid of the file is a body with the name of its
+  part. File > STEP Detail sets the size of the triangles (Coarse, Normal,
+  Fine, Very fine) and reads the open STEP file again. A STEP file is in
+  mm. Export it in a mesh format: STL, 3MF, OBJ...
 - Bodies: the objects of a 3MF, OBJ, ASCII STL or glTF file are separate
   bodies. The repair repairs each body alone. The export keeps them as
   objects in 3MF, OBJ, ASCII STL, glTF and VTK; the other formats get one

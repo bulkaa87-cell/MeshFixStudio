@@ -94,7 +94,8 @@ if sys.platform == "darwin":
                 "CFBundleTypeName": "STL mesh",
                 "CFBundleTypeRole": "Editor",
                 "LSItemContentTypes": ["public.standard-tesselated-geometry-format"],
-                "CFBundleTypeExtensions": ["stl", "obj", "ply"],
+                "CFBundleTypeExtensions": ["stl", "obj", "ply", "3mf",
+                                           "step", "stp"],
             }],
         },
     )

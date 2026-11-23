@@ -3,6 +3,17 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.4.5
+
+- Open STEP files (.step, .stp) of CAD programs: a 3D view of the model,
+  the check, the repair, and the export to STL, 3MF, OBJ, PLY, OFF, glTF
+  or VTK. OpenCASCADE makes the triangles. Each solid is a body with the
+  name of its part in the assembly. The read shows a progress bar with
+  the percent of the triangle step.
+- File > STEP Detail: Coarse, Normal (default), Fine, Very fine. A change
+  reads the open STEP file again.
+- The installer is about 170 MB larger on the disk (OpenCASCADE).
+
 ## What is new in 0.4.4
 
 - A version badge in the right corner of the menu bar. When a newer

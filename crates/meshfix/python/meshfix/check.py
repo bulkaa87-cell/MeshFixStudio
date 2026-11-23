@@ -158,7 +158,7 @@ def drop_stray_cells(mesh: pv.PolyData) -> pv.PolyData:
 
 
 
-def load_surface(path: str) -> pv.PolyData:
+def load_surface(path: str, progress=None) -> pv.PolyData:
     """Читає файл сітки (формати meshfix.formats) і повертає трикутну поверхню.
 
     Файл без жодного трикутника відкидаємо ТУТ, а не десь далі. Перевірка
@@ -166,8 +166,12 @@ def load_surface(path: str) -> pv.PolyData:
     така геометрія доходила до вʼюпорта, де падала на порахунку нормалей —
     уже у вікні, з трасуванням у консоль замість людського повідомлення.
     """
-    reader = READERS.get(os.path.splitext(str(path))[1].lower(), _read_vtk)
-    mesh = reader(path)
+    suffix = os.path.splitext(str(path))[1].lower()
+    if suffix in CAD_READERS:
+        # STEP: a long read; progress(text, fraction or None) reports it.
+        mesh = CAD_READERS[suffix](path, progress)
+    else:
+        mesh = READERS.get(suffix, _read_vtk)(path)
     if not isinstance(mesh, pv.PolyData):
         mesh = mesh.extract_surface(algorithm="dataset_surface")
     keep = {k: mesh.field_data[k] for k in (BODY_NAMES, UNIT)
@@ -885,8 +889,23 @@ def _read_vtk(path):
 
 
 READERS = {f.suffix: f.read for f in FORMATS.values()}
+
+
+def _read_step(path, progress=None):
+    from . import cad
+    return _fmt.to_polydata(cad.read_step(path, progress))
+
+
+# CAD files: read only (meshfix.cad makes the triangles of the exact
+# surfaces). They are in READERS only when OpenCASCADE (OCP) is installed.
+# A reader here takes (path, progress).
+from . import cad as _cad
+CAD_READERS = ({s: _read_step for s in _cad.SUFFIXES}
+               if _cad.available() else {})
+READERS.update(CAD_READERS)
 WRITERS = {suffix: (lambda mesh, path, _k=key: write_mesh(mesh, path, _k))
            for suffix, key in _fmt.DEFAULT_FOR_SUFFIX.items()}
+# READERS has more suffixes than WRITERS: the CAD files (read only).
 # The export formats in the order of the dialog.
 EXPORT_FORMATS = tuple(FORMATS)
 
@@ -927,8 +946,14 @@ def export_filters(n_bodies: int = 1) -> list:
 
 def open_filter() -> str:
     """The filter text of an open dialog: all readable mesh files."""
-    return tr("Meshes ({patterns});;All files (*)",
+    text = tr("Meshes ({patterns});;All files (*)",
               patterns=" ".join("*" + s for s in READERS))
+    if CAD_READERS:
+        # A second filter with the CAD files only, after the first one.
+        first, rest = text.split(";;", 1)
+        text = first + ";;" + tr("STEP CAD files ({patterns})", patterns=" ".join(
+            "*" + s for s in CAD_READERS)) + ";;" + rest
+    return text
 
 
 UNIT_NAMES = {1e-6: "µm", 1e-3: "mm", 1e-2: "cm", 0.0254: "in",

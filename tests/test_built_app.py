@@ -15,6 +15,9 @@ Run it after each build, before somebody else starts the program:
    again (the result is OUT.json). Exit code 0 and "ok": true.
 3. The same for each other export format (3MF, OBJ, PLY, OFF, glTF, VTK),
    and a 3MF as the input.
+4. A STEP file as the input (OpenCASCADE in the frozen program). The test
+   makes the STEP file with OCP: without OCP in this Python, it is a FAIL
+   (each build must have STEP).
 
 On Linux and macOS without a screen, set QT_QPA_PLATFORM=offscreen: part 1
 then only checks that the process lives and ends when it is stopped.
@@ -167,6 +170,17 @@ def part_formats(exe: str, src: str, tmp: str, env: dict) -> None:
         part_smoke(exe, three, tmp, env, "from_3mf.stl", "   3MF input")
 
 
+def part_step(exe: str, tmp: str, env: dict) -> None:
+    print("4. --smoke-test with a STEP file as the input")
+    try:
+        from make_step import make_step
+        src = make_step(os.path.join(tmp, "two solids.step"))
+    except ImportError as exc:
+        check("STEP: OCP in the Python of the test", False, exc)
+        return
+    part_smoke(exe, src, tmp, env, "from_step.stl", "   STEP input")
+
+
 def main() -> int:
     if len(sys.argv) < 2:
         print(__doc__)
@@ -193,6 +207,7 @@ def main() -> int:
             part_start_other(exe, copy, env)
         part_smoke(exe, copy, tmp, env)
         part_formats(exe, copy, tmp, env)
+        part_step(exe, tmp, env)
     finally:
         cache = env["FS_3D_CACHE"]
         if os.path.isfile(cache):

@@ -28,6 +28,8 @@ windows = [
     "winrt-Windows.Storage.Streams>=3.2; sys_platform == 'win32'",
 ]
 qt = ["PySide6>=6.7"]
+# STEP files (meshfix.cad): OpenCASCADE. Without it, STEP is not a reader.
+cad = ["cadquery-ocp-novtk>=7.8"]
 
 [project.urls]
 Source = "https://github.com/bulkaa87-cell/MeshFixStudio"

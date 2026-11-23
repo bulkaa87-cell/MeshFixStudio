@@ -57,6 +57,7 @@ from meshfix import check as geo
 from meshfix import i18n as fs_i18n
 from meshfix import methods as fs_repair
 from meshfix import repair as fs_meshfix
+from meshfix import cad
 from meshfix.i18n import tr
 from meshfix.qt import RepairWorker, end_process
 
@@ -202,6 +203,9 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.setWindowIcon(app_icon())
         self.setAcceptDrops(True)
         self.store = open_settings()
+        # The detail of the triangles of a STEP file (meshfix.cad.DETAILS).
+        level = str(self.store.value("step_detail", cad.DEFAULT_DETAIL))
+        cad.detail = level if level in cad.DETAILS else cad.DEFAULT_DETAIL
 
         self.path: Path | None = None
         self.factor = 1.0               # metres per unit of the file
@@ -242,9 +246,11 @@ class MeshFixWindow(QtWidgets.QMainWindow):
 
         self.btn_open = QtWidgets.QPushButton("Open…")
         self.btn_open.setToolTip("Open a mesh file: STL, 3MF, OBJ, PLY, OFF, "
-                                 "glTF, VTP, VTK. You can also drop a file "
-                                 "on the window. Several files become one "
-                                 "model with a body for each file.")
+                                 "glTF, VTP, VTK, or a STEP file (.step, "
+                                 ".stp) from a CAD program. You can also "
+                                 "drop a file on the window. Several files "
+                                 "become one model with a body for each "
+                                 "file.")
         self.btn_open.clicked.connect(self.open_dialog)
         bar.addWidget(self.btn_open)
         bar.addSeparator()
@@ -522,6 +528,22 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.act_export = m.addAction("Export…", self.export_dialog)
         self.act_export.setShortcut(QtGui.QKeySequence("Ctrl+E"))
         m.addSeparator()
+        # The size of the triangles that the program makes for a STEP file.
+        detail = m.addMenu("STEP Detail")
+        detail.setEnabled(bool(geo.CAD_READERS))
+        if not geo.CAD_READERS:
+            detail.setToolTip("OpenCASCADE (the package cadquery-ocp-novtk) "
+                              "is not installed")
+        self.detail_group = QtGui.QActionGroup(self)
+        self.act_detail = {}
+        for key, d in cad.DETAILS.items():
+            act = detail.addAction(d.label)
+            act.setCheckable(True)
+            act.setChecked(key == cad.detail)
+            act.triggered.connect(lambda _=False, k=key: self.set_detail(k))
+            self.detail_group.addAction(act)
+            self.act_detail[key] = act
+        m.addSeparator()
         m.addAction("Quit", self.close).setShortcut(QtGui.QKeySequence.Quit)
 
         m = mb.addMenu("&Edit")
@@ -660,6 +682,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.step.connect(self._on_step)
+        self._worker.fraction.connect(self._on_fraction)
         self._worker.ready.connect(self._on_ready)
         self._worker.failed.connect(self._on_failed)
         self._thread.start()
@@ -669,6 +692,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
     def _end(self):
         self.tick.stop()
         self.busy.hide()
+        self._on_fraction(-1.0)
         if self._thread is not None:
             self._thread.quit()
             self._thread.wait(5000)
@@ -691,6 +715,31 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._tick()
         if verdict:
             self._note(text)
+
+    @QtCore.Slot(float)
+    def _on_fraction(self, value: float):
+        """A percent bar for 0..1, the busy bar for a value below 0."""
+        if value < 0:
+            self.busy.setRange(0, 0)
+            self.busy.setTextVisible(False)
+        else:
+            self.busy.setRange(0, 1000)
+            self.busy.setValue(int(round(min(value, 1.0) * 1000)))
+            self.busy.setFormat("%p %")
+            self.busy.setTextVisible(True)
+
+    def set_detail(self, key: str):
+        """The detail of the triangles of the next STEP file. An open STEP
+        file is read again with the new detail."""
+        if key not in cad.DETAILS:
+            return
+        cad.detail = key
+        self.store.setValue("step_detail", key)
+        if key in self.act_detail:
+            self.act_detail[key].setChecked(True)
+        if (self.path is not None and cad.is_cad(self.path)
+                and not self.busy_now and self.path.is_file()):
+            self.open_file(self.path)
 
     @QtCore.Slot(str)
     def _on_failed(self, message: str):
@@ -776,7 +825,13 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             items, factor, note, given = [], base_factor, "", False
             for path in paths:
                 say(tr("Reading {name}…", name=path.name))
-                raw = geo.load_surface(str(path))
+
+                def progress(text, frac=None):
+                    # -1: no percent (the busy bar), else 0..1.
+                    say(text, -1.0 if frac is None else frac)
+                raw = geo.load_surface(str(path), progress=progress)
+                say(text=tr("Reading {name}…", name=path.name),
+                    fraction=-1.0)
                 f, why = geo.guess_scale(raw)
                 has_unit = geo.UNIT in raw.field_data
                 if factor is None:
@@ -821,6 +876,9 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._show(reset_camera=True)
         self._note(tr("Opened {name}: {n} triangles", name=names,
                       n=_num(state.diag.n_triangles)))
+        if any(cad.is_cad(p) for p in paths):
+            self._note(tr("STEP: detail «{level}» (File > STEP Detail)",
+                          level=tr(cad.DETAILS[cad.detail].label)))
         if len(paths) > 1:
             self._note(tr("{n} files, {b} bodies", n=len(paths),
                           b=_num(geo.body_count(state.mesh))))
@@ -1021,7 +1079,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         if mesh is None:
             return []
         path = Path(path)
-        if path.suffix.lower() not in geo.READERS:
+        if path.suffix.lower() not in geo.WRITERS:
             path = Path(str(path) + geo.FORMATS[fmt or "stl"].suffix)
         source = self.path.stem if self.path else ""
         files = geo.body_file_names(mesh, path, source)
@@ -1082,7 +1140,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         if mesh is None:
             return None
         path = Path(path)
-        if path.suffix.lower() not in geo.READERS:
+        if path.suffix.lower() not in geo.WRITERS:
             path = Path(str(path) + geo.FORMATS[fmt or "stl"].suffix)
         try:
             form = geo.format_for(path, fmt)

@@ -31,16 +31,25 @@ class RepairWorker(QtCore.QObject):
     ready = QtCore.Signal(object)      # the result of the job
     failed = QtCore.Signal(str)
     step = QtCore.Signal(str)
+    # 0..1 when the job knows its percent (the read of a STEP file); the
+    # window then shows a percent bar in place of the busy bar.
+    fraction = QtCore.Signal(float)
 
     def __init__(self, job, meshes):
         super().__init__()
         self.job = job
         self.meshes = meshes
 
+    def say(self, text: str, fraction: float | None = None) -> None:
+        """The `step` of the job: a text, and the percent if known."""
+        self.step.emit(str(text))
+        if fraction is not None:
+            self.fraction.emit(float(fraction))
+
     @QtCore.Slot()
     def run(self):
         try:
-            self.ready.emit(self.job(self.meshes, self.step.emit))
+            self.ready.emit(self.job(self.meshes, self.say))
         except Exception as exc:                          # noqa: BLE001
             self.failed.emit(f"{exc}")
 

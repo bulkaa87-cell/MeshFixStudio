@@ -190,6 +190,16 @@ keep it as a changelog.
     installer with /SILENT /WAITPID=<pid> /RELAUNCH=1. The .iss waits for
     the process (InitializeSetup) and starts the program again ([Run],
     RelaunchWanted). Test: tests/test_update.py (a local HTTP server).
+23. STEP files (2026-11-23, for 0.4.5, not released): meshfix.cad reads
+    .step/.stp with OpenCASCADE (cadquery-ocp-novtk, optional extra
+    `cad`; CI installs it). BRepMesh on compounds of about 2000 faces
+    (parallel), then the triangles of each face to numpy, the points of
+    each solid joined. A solid = a body with its part name, unit mm.
+    check.CAD_READERS (read only, only with OCP). The window: File > STEP
+    Detail (QSettings step_detail), a percent bar through
+    RepairWorker.fraction. Measured: an assembly of 725 solids (24 MB)
+    in 25-40 s, 357 000 triangles, 0 open edges. Tests: test_core part
+    8b, test_app part 2c, test_built_app part 4 (tests/make_step.py).
 
 ## Next
 

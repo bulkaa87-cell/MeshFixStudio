@@ -57,6 +57,9 @@ Each load and each download MUST show a progress bar (rule of the owner,
 - No measure (a reader of a mesh file, a repair step): a busy bar with the
   name of the step and the seconds (`MeshFixWindow._tick`). Never a silent
   wait.
+- A job that knows its percent calls `say(text, fraction)` (0..1;
+  `RepairWorker.fraction`): the window then shows a percent bar. -1 gives
+  the busy bar again. Example: the read of a STEP file (meshfix.cad).
 - Before a release, examine each new load or download for its bar.
 
 ## Version and update

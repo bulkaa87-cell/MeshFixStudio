@@ -1,0 +1,16 @@
+{
+ "Coarse": "Грубо",
+ "Collecting the triangles: body {i} of {n}": "Збираю трикутники: тіло {i} з {n}",
+ "Fine": "Дрібно",
+ "Making the solids of {name}…": "Будую тіла з {name}…",
+ "Making triangles: {pct} %": "Будую трикутники: {pct} %",
+ "Normal": "Звичайно",
+ "OpenCASCADE made no triangles for the file {name}.": "OpenCASCADE не побудував жодного трикутника для файлу {name}.",
+ "Reading the STEP file {name}…": "Читаю файл STEP {name}…",
+ "STEP CAD files ({patterns})": "Файли CAD STEP ({patterns})",
+ "The file {name} has no shape that the program can read.": "У файлі {name} немає форми, яку програма може прочитати.",
+ "The file {name} has no solid and no surface.": "У файлі {name} немає ні тіла, ні поверхні.",
+ "The file {name} is not a STEP file, or it is damaged.": "Файл {name} — не файл STEP, або він пошкоджений.",
+ "To open a STEP file, the program needs OpenCASCADE (the Python package cadquery-ocp-novtk). It is not installed.": "Щоб відкрити файл STEP, програмі потрібен OpenCASCADE (пакет Python cadquery-ocp-novtk). Його не встановлено.",
+ "Very fine": "Дуже дрібно"
+}
