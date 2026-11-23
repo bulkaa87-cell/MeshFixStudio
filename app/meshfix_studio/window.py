@@ -61,6 +61,7 @@ from meshfix.i18n import tr
 from meshfix.qt import RepairWorker, end_process
 
 from . import __version__
+from . import update
 
 APP_NAME = "MeshFix Studio"
 SETTINGS_ORG = "MeshFix Studio"
@@ -336,6 +337,11 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.tick.timeout.connect(self._tick)
 
         self._build_menu()
+        # The version and «Update to X» in the corner of the menu bar
+        # (update.py): one click downloads and installs the new version.
+        self.update_badge = update.add_badge(
+            self, app_name=APP_NAME, version=__version__,
+            repo=SOURCE_URL.split("github.com/")[1])
 
     def _build_info(self) -> QtWidgets.QWidget:
         box = QtWidgets.QWidget()

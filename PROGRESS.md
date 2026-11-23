@@ -182,6 +182,14 @@ keep it as a changelog.
     OpenFOAM Studio 0.2.1, vtk_to_numpy failed on them (NameError
     vtkConstants in VTK 9.7 numpy_support), and the domain, the point and
     the flow arrow were not drawn.
+22. Release v0.4.4 (2026-11-23): the version badge in the corner of the
+    menu bar (app/meshfix_studio/update.py, the same file as fs_update.py
+    of OpenFOAM Studio). It asks the GitHub API for the latest release;
+    a click downloads the Windows installer with a progress bar, compares
+    the SHA-256 with SHA256SUMS.txt, closes the program and starts the
+    installer with /SILENT /WAITPID=<pid> /RELAUNCH=1. The .iss waits for
+    the process (InitializeSetup) and starts the program again ([Run],
+    RelaunchWanted). Test: tests/test_update.py (a local HTTP server).
 
 ## Next
 

@@ -6,7 +6,8 @@ folder for this test process and sets:
   there, not to the registry or to the settings folder of the user;
 - FS_3D_CACHE: the cache of the 3D level probe goes there;
 - FS_SYSTEM_LANG=uk: the "language of the computer" is Ukrainian on each
-  computer. MeshFix Studio must still start in English.
+  computer. MeshFix Studio must still start in English;
+- NO_UPDATE_CHECK=1: the window does not ask GitHub for a new version.
 It also puts the source folders on sys.path, for a run without
 installation. The native modules must be installed (pip install of the
 wheels, or maturin develop).
@@ -30,6 +31,8 @@ os.environ["MESHFIX_SETTINGS_DIR"] = DIR
 os.environ["FS_3D_CACHE"] = os.path.join(DIR, "view3d.json")
 os.environ["FS_SYSTEM_LANG"] = "uk"
 os.environ.pop("FS_LANG", None)
+# No question to GitHub at the start of a test window (update.py).
+os.environ["NO_UPDATE_CHECK"] = "1"
 
 for stream in (sys.stdout, sys.stderr):
     try:

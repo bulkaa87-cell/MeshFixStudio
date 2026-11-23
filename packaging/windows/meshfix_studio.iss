@@ -1,6 +1,6 @@
 ; Inno Setup script of the Windows installer of MeshFix Studio.
 ;
-;   iscc /DAppVersion=0.4.3 packaging\windows\meshfix_studio.iss
+;   iscc /DAppVersion=0.4.4 packaging\windows\meshfix_studio.iss
 ;
 ; Input: the PyInstaller folder dist\MeshFix Studio\ (see
 ; packaging\pyinstaller\meshfix_studio.spec). Output:
@@ -11,7 +11,7 @@
 ; the "Open with MeshFix Studio" entry for .stl, .obj and .ply files.
 
 #ifndef AppVersion
-  #define AppVersion "0.4.3"
+  #define AppVersion "0.4.4"
 #endif
 #define AppName "MeshFix Studio"
 #define AppExe "MeshFix Studio.exe"
@@ -72,6 +72,11 @@ Root: HKA; Subkey: "Software\Classes\.ply\OpenWithProgids"; ValueType: string; V
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
+; The update from the program (update.py of the program): /RELAUNCH=1
+; starts the program again after a silent install. runasoriginaluser: not
+; as the administrator of an install for all users.
+Filename: "{app}\{#AppExe}"; Check: RelaunchWanted; Flags: nowait runasoriginaluser
+
 [Code]
 // An installed version is removed before the new version is installed.
 // Without this, files that the new version does not have stay in the
@@ -130,4 +135,37 @@ begin
     else
       RemoveOld(HKLM);
   end;
+end;
+
+{ ---- The update from the program (update.py of the program). ----
+  The program starts this installer with /SILENT /WAITPID=<its process>
+  /RELAUNCH=1 and then closes. The installer waits until that process has
+  ended (at most 5 min): only then can the old version go. After the
+  install, [Run] starts the program again. }
+function OpenProcess(Access: Cardinal; Inherit: Boolean; Pid: Cardinal): Cardinal;
+  external 'OpenProcess@kernel32.dll stdcall';
+function WaitForSingleObject(Handle: Cardinal; Ms: Cardinal): Cardinal;
+  external 'WaitForSingleObject@kernel32.dll stdcall';
+function CloseHandle(Handle: Cardinal): Boolean;
+  external 'CloseHandle@kernel32.dll stdcall';
+
+function InitializeSetup(): Boolean;
+var
+  Pid, Handle: Cardinal;
+begin
+  Result := True;
+  Pid := StrToIntDef(ExpandConstant('{param:WAITPID|0}'), 0);
+  if Pid = 0 then
+    Exit;
+  Handle := OpenProcess($00100000 { SYNCHRONIZE }, False, Pid);
+  if Handle = 0 then
+    Exit;
+  Log('Waiting for the program to close (process ' + IntToStr(Pid) + ')');
+  WaitForSingleObject(Handle, 300000);
+  CloseHandle(Handle);
+end;
+
+function RelaunchWanted(): Boolean;
+begin
+  Result := ExpandConstant('{param:RELAUNCH|0}') = '1';
 end;

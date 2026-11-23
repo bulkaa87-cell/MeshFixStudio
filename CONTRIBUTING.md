@@ -59,6 +59,24 @@ Each load and each download MUST show a progress bar (rule of the owner,
   wait.
 - Before a release, examine each new load or download for its bar.
 
+## Version and update
+
+- The version is `__version__` in `app/meshfix_studio/__init__.py` (and the
+  other places in PLAN.md, «A change»).
+- `app/meshfix_studio/update.py` is the badge in the corner of the menu bar:
+  the version, and «Update to X» when GitHub has a newer release. On
+  Windows, a click downloads the installer with a progress bar, compares
+  SHA-256 with `SHA256SUMS.txt`, closes the program and starts the
+  installer with `/SILENT /WAITPID=<pid> /RELAUNCH=1`. Each release MUST
+  have the asset `MeshFix-Studio-<v>-windows-x64-setup.exe` and
+  `SHA256SUMS.txt` (CI makes both).
+- The .iss waits for that process (`InitializeSetup`) and starts the
+  program again (`[Run]`, `RelaunchWanted`).
+- `update.py` is the same file as `fs_update.py` of OpenFOAM Studio.
+  Change both the same way.
+- Tests set `NO_UPDATE_CHECK=1` (`tests/_isolate.py`). `tests/test_update.py`
+  uses a local HTTP server (`UPDATE_API_URL`).
+
 ## Tests
 
 Run these before a pull request:

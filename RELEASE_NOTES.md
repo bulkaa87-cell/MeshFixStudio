@@ -3,6 +3,16 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.4.4
+
+- A version badge in the right corner of the menu bar. When a newer
+  release is on GitHub, the badge shows «Update to X». On Windows, one
+  click downloads the installer (a progress bar with the percent, the MB
+  and the speed), compares its SHA-256 with SHA256SUMS.txt of the release,
+  closes the program, installs the new version silent and starts the
+  program again. On macOS and Linux the click opens the release page.
+  A right click: «Look for a newer version», «Open the release page».
+
 ## What is new in 0.4.3
 
 - The 3D view reads the lines of a mesh also when VTK keeps their offsets

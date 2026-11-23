@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-__version__ = "0.4.3"
+__version__ = "0.4.4"
 
 try:
     from meshfix import i18n as _i18n
