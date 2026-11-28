@@ -3,6 +3,20 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## What is new in 0.4.6
+
+- Linux: the 3D view uses the graphics card also on new systems. The
+  AppImage had old copies of system libraries (libstdc++ and others) of
+  the build system. On Fedora 44 the graphics driver then did not load,
+  and the 3D view said «libOSMesa not found» and drew on the CPU. The
+  program now uses the libraries of the system.
+- Linux: at the start, the AppImage checks the system libraries. If one
+  is missing, it asks and installs it with the package manager of the
+  system (apt, dnf, zypper or pacman).
+- A browser removes the execute permission from a downloaded file: make
+  the AppImage executable first (right-click > Properties > «Executable
+  as Program», or `chmod +x`).
+
 ## What is new in 0.4.5
 
 - Delete bodies: in the list «Bodies to export», select one or more
