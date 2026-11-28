@@ -420,7 +420,20 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.lst_bodies = QtWidgets.QListWidget()
         self.lst_bodies.setMaximumHeight(200)
         self.lst_bodies.itemChanged.connect(lambda _i: self._bodies_changed())
+        # Select rows (Ctrl / Shift for more) to delete them.
+        self.lst_bodies.setSelectionMode(
+            QtWidgets.QAbstractItemView.ExtendedSelection)
+        self.lst_bodies.itemSelectionChanged.connect(self._sync)
         inner.addWidget(self.lst_bodies)
+        self.btn_delete = QtWidgets.QPushButton("Delete Selected")
+        self.btn_delete.setToolTip(
+            "Delete the selected bodies from the model (key Delete). "
+            "Select more rows with Ctrl or Shift. Undo brings them back.")
+        self.btn_delete.clicked.connect(lambda _=False: self.delete_bodies())
+        drow = QtWidgets.QHBoxLayout()
+        drow.addWidget(self.btn_delete)
+        drow.addStretch(1)
+        inner.addLayout(drow)
         self.chk_each = QtWidgets.QCheckBox("A file for each body")
         self.chk_each.setToolTip(
             "Export each selected body to a file of its own: "
@@ -494,6 +507,12 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             self._show_bodies()
         self._sync()
 
+    def selected_bodies(self) -> list:
+        """The indices of the selected rows of the body list (not the
+        check boxes: those are for the export and the view)."""
+        lst = self.lst_bodies
+        return sorted(lst.row(it) for it in lst.selectedItems())
+
     def export_selection(self) -> list:
         """The indices of the bodies with a check."""
         lst = self.lst_bodies
@@ -552,6 +571,9 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.act_split = m.addAction("Split into Parts",
                                      lambda: self.split_parts())
         self.act_split.setShortcut(QtGui.QKeySequence("Ctrl+P"))
+        self.act_delete = m.addAction("Delete Selected Bodies",
+                                      lambda: self.delete_bodies())
+        self.act_delete.setShortcut(QtGui.QKeySequence.Delete)
         self.act_undo = m.addAction("Undo", self.undo)
         self.act_undo.setShortcut(QtGui.QKeySequence.Undo)
         self.act_reset = m.addAction("Reset", self.reset)
@@ -645,10 +667,15 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             not hasattr(self, "lst_bodies") or self.lst_bodies.count() == 0
             or bool(self.export_selection())))
         self.btn_undo.setEnabled(idle and bool(self.history))
+        if hasattr(self, "btn_delete"):
+            sel = len(self.selected_bodies())
+            self.btn_delete.setEnabled(
+                idle and has and 0 < sel < self.lst_bodies.count())
         self.btn_reset.setEnabled(idle and has and self.state is not self.loaded)
         if hasattr(self, "act_repair"):
             self.act_repair.setEnabled(self.btn_repair.isEnabled())
             self.act_split.setEnabled(self.btn_split.isEnabled())
+            self.act_delete.setEnabled(self.btn_delete.isEnabled())
             self.act_add.setEnabled(idle and has)
             self.act_export.setEnabled(self.btn_export.isEnabled())
             self.act_undo.setEnabled(self.btn_undo.isEnabled())
@@ -750,7 +777,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._say("")
         self._note(tr("Failed: {message}", message=message))
         title = {"load": tr("Open failed"),
-                 "split": tr("Split failed")}.get(job, tr("Repair failed"))
+                 "split": tr("Split failed"),
+                 "delete": tr("Delete failed")}.get(job, tr("Repair failed"))
         QtWidgets.QMessageBox.critical(self, title, message)
 
     @QtCore.Slot(object)
@@ -765,6 +793,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             self._repaired(result)
         elif job == "split":
             self._split_done(result)
+        elif job == "delete":
+            self._delete_done(result)
         elif job == "units":
             self._units_done(result)
         elif job == "check":
@@ -990,6 +1020,42 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             return info, _state_of(mesh)
         self._note(tr("Split into parts"))
         return self._start("split", job, tr("Splitting into parts…"))
+
+    # ---------------------------------------------------------------- delete
+    def delete_bodies(self, rows=None) -> bool:
+        """Delete the selected bodies (meshfix.formats.remove_bodies), in
+        the worker thread. One body at least stays. Undo goes back."""
+        if self.state is None or self.busy_now:
+            return False
+        rows = self.selected_bodies() if rows is None else sorted(set(rows))
+        n = max(self.lst_bodies.count(), 1)
+        if not rows:
+            return False
+        if len(rows) >= n:
+            text = tr("All bodies are selected: one body at least must "
+                      "stay. To start again, open another file.")
+            self._say(text)
+            self._note(text)
+            return False
+        before = self.state
+        names = [self.lst_bodies.item(i).text() for i in rows]
+
+        def job(_meshes, say):
+            mesh = geo.remove_bodies(before.mesh, rows)
+            say(tr("Checking the result…"))
+            return names, _state_of(mesh)
+        self._note(tr("Delete: {names}", names=", ".join(names)))
+        return self._start("delete", job, tr("Deleting bodies…"))
+
+    def _delete_done(self, result):
+        names, state = result
+        self._push(self.state)
+        self.state = state
+        self.repaired = None
+        self._show(reset_camera=False)
+        text = tr("Deleted bodies: {n}", n=_num(len(names)))
+        self._say(text)
+        self._note(text)
 
     def _split_done(self, result):
         info, state = result

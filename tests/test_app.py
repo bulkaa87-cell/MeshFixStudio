@@ -537,6 +537,38 @@ def part_split(win):
     win.undo()
     check("undo of add: 2 bodies", geo.body_count(win.state.mesh) == 2)
 
+    # Delete selected bodies.
+    check("3 files again", win.open_files([a, b, c]) and wait(win))
+    lst = win.lst_bodies
+    check("delete: no selection, the button is off",
+          not lst.selectedItems() and not win.btn_delete.isEnabled()
+          and not win.act_delete.isEnabled())
+    lst.item(0).setSelected(True)
+    lst.item(2).setSelected(True)
+    pump(100)
+    check("delete: 2 rows selected, the button is on",
+          win.selected_bodies() == [0, 2] and win.btn_delete.isEnabled()
+          and win.act_delete.isEnabled())
+    win.act_delete.trigger()              # the menu item / key Delete
+    check("delete ends", wait(win))
+    check("delete: only «second» stays",
+          geo.body_names(win.state.mesh) == ["second"]
+          and win.state.mesh.n_cells == 12
+          and win.info["bodies"].text() == "1", geo.body_names(win.state.mesh))
+    check("delete: undo is possible", win.btn_undo.isEnabled())
+    win.undo()
+    check("undo of delete: 3 bodies again",
+          geo.body_names(win.state.mesh) == ["first", "second", "third"])
+    for i in range(lst.count()):
+        lst.item(i).setSelected(True)
+    pump(100)
+    n = len(win.history)
+    check("delete: all selected, the button is off",
+          not win.btn_delete.isEnabled())
+    check("delete: all selected, nothing deleted",
+          not win.delete_bodies() and len(win.history) == n
+          and geo.body_count(win.state.mesh) == 3)
+
 
 def part_step(win):
     print("2c. STEP")

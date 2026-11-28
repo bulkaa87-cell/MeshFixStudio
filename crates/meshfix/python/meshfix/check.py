@@ -881,7 +881,7 @@ def write_stl(mesh: pv.PolyData, path: str, binary: bool = True) -> None:
 from . import formats as _fmt
 from .formats import (BODY, BODY_NAMES, FORMATS, UNIT, Format, body_count,  # noqa: F401
                       SplitInfo, body_names, combine, given_names,
-                      join_bodies, split_bodies, split_parts)
+                      join_bodies, remove_bodies, split_bodies, split_parts)
 
 
 def _read_vtk(path):

@@ -475,6 +475,27 @@ def part_split():
     check("save_bodies: bad characters, equal names, no name",
           names == ["m_a_b.obj", "m_a_b_2.obj", "m_3.obj"], names)
 
+    # remove_bodies (the «Delete» command of the window).
+    three = geo.join_bodies([("A", poly(*a)), ("", poly(*far)),
+                             ("C", poly(*face))])
+    three.field_data[geo.UNIT] = np.array([0.001])
+    shown = geo.body_names(three)
+    out = geo.remove_bodies(three, [0])
+    check("remove_bodies: the other bodies, the names as shown, the unit",
+          geo.body_names(out) == shown[1:]
+          and out.n_cells == three.n_cells - poly(*a).n_cells
+          and float(np.asarray(out.field_data[geo.UNIT])[0]) == 0.001,
+          (geo.body_names(out), shown))
+    check("remove_bodies: nothing to remove -> the same mesh",
+          geo.remove_bodies(three, []) is three
+          and geo.remove_bodies(three, [7]) is three)
+    check("remove_bodies: all removed -> empty",
+          geo.remove_bodies(three, [0, 1, 2]).n_cells == 0)
+    one = poly(*a)
+    check("remove_bodies: a mesh without bodies is body 0",
+          geo.remove_bodies(one, [0]).n_cells == 0
+          and geo.remove_bodies(one, [1]) is one)
+
 
 def _write(path, text, mode="w"):
     with open(path, mode, **({} if "b" in mode else {"newline": "\n"})) as f:

@@ -164,6 +164,27 @@ def join_bodies(parts) -> pv.PolyData:
     return out
 
 
+def remove_bodies(mesh: pv.PolyData, indices) -> pv.PolyData:
+    """`mesh` without the bodies with these indices (the «Delete» command).
+    The other bodies keep their names, their order and the unit of the
+    file. Returns `mesh` itself when nothing is removed, and an empty
+    PolyData when all bodies are removed (the caller does not allow that).
+    A mesh without the body array is one body (index 0)."""
+    drop = {int(i) for i in indices}
+    bodies = split_bodies(mesh)
+    if not drop or not any(i in drop for i in range(len(bodies))):
+        return mesh
+    # The names as the person sees them ("body 3" stays "body 3", it does
+    # not move to "body 2" when "body 2" goes).
+    keep = [(name, m) for i, (name, m) in enumerate(bodies) if i not in drop]
+    if not keep:
+        return pv.PolyData()
+    out = join_bodies(keep)
+    if UNIT in mesh.field_data:
+        out.field_data[UNIT] = np.asarray(mesh.field_data[UNIT])
+    return out
+
+
 @dataclass
 class SplitInfo:
     """What split_parts() did."""
