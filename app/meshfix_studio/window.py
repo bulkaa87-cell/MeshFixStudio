@@ -167,6 +167,7 @@ def body_color(i: int, n: int) -> str:
 
 
 COL_SELECTED = "#ff9500"     # the selected bodies (as in OpenFOAM Studio)
+COL_SECTION = "#33d1ff"      # the cut line of the section view
 
 
 def pick_ray(cam, w: float, h: float, x: float, y: float):
@@ -396,7 +397,13 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self._pick_cache = None
         self.view.plotter.interactor.installEventFilter(self)
         self.view.btn_spot.clicked.connect(self.next_problem)
-        split.addWidget(self.view)
+        left = QtWidgets.QWidget()
+        lv = QtWidgets.QVBoxLayout(left)
+        lv.setContentsMargins(0, 0, 0, 0)
+        lv.setSpacing(0)
+        lv.addWidget(self.view, 1)
+        lv.addWidget(self._build_section())
+        split.addWidget(left)
         split.addWidget(self._build_info())
         split.setStretchFactor(0, 1)
         split.setStretchFactor(1, 0)
@@ -570,11 +577,13 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         disp = st.display
         if not on and n:
             v.show_body(None)
+            v._drop("section")
             return
         if len(on) < n and geo.BODY in disp.cell_data:
             ids = np.asarray(disp.cell_data[geo.BODY])
             disp = disp.remove_cells(np.nonzero(~np.isin(ids, on))[0])
-        v.show_body(disp, reset=reset)
+        v.show_body(self._clip(disp), reset=reset)
+        self._show_cut(disp)
 
     def _bodies_changed(self, update_view: bool = True):
         lst = self.lst_bodies
@@ -588,6 +597,156 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             if hasattr(self, "view"):
                 self._selection_changed()      # a hidden body: no highlight
         self._sync()
+
+    # ---------------------------------------------------------- section view
+    def _build_section(self) -> QtWidgets.QWidget:
+        """The bar of the section view (View > Section View): a plane
+        across one axis cuts the model, the part on one side is not shown.
+        Hidden while the section is off."""
+        bar = QtWidgets.QWidget()
+        bar.setObjectName("section_bar")
+        row = QtWidgets.QHBoxLayout(bar)
+        row.setContentsMargins(6, 3, 6, 3)
+        row.addWidget(QtWidgets.QLabel("Section"))
+        self.cmb_section = QtWidgets.QComboBox()
+        for i, name in enumerate("XYZ"):
+            self.cmb_section.addItem(name, i)
+        self.cmb_section.setToolTip("The axis across the section plane")
+        row.addWidget(self.cmb_section)
+        self.sld_section = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.sld_section.setRange(0, 1000)
+        self.sld_section.setValue(500)
+        self.sld_section.setToolTip(
+            "The place of the section plane, from the start to the end of "
+            "the model along the axis")
+        row.addWidget(self.sld_section, 1)
+        self.lbl_section = QtWidgets.QLabel("")
+        self.lbl_section.setMinimumWidth(110)
+        row.addWidget(self.lbl_section)
+        self.chk_section_flip = QtWidgets.QCheckBox("Other side")
+        self.chk_section_flip.setToolTip(
+            "Show the part on the other side of the plane")
+        row.addWidget(self.chk_section_flip)
+        close = QtWidgets.QToolButton()
+        close.setText("×")
+        close.setToolTip("Close the section view")
+        close.clicked.connect(lambda: self.set_section(False))
+        row.addWidget(close)
+        bar.setVisible(False)
+        self.section_bar = bar
+        # A slider drag gives many values: draw after a short pause.
+        self._section_timer = QtCore.QTimer(self)
+        self._section_timer.setSingleShot(True)
+        self._section_timer.setInterval(60)
+        self._section_timer.timeout.connect(self._section_changed)
+        self.cmb_section.currentIndexChanged.connect(
+            lambda _i: self._section_timer.start())
+        self.sld_section.valueChanged.connect(
+            lambda _v: self._section_timer.start())
+        self.chk_section_flip.toggled.connect(
+            lambda _v: self._section_timer.start())
+        return bar
+
+    def set_section(self, on: bool) -> None:
+        """Turn the section view on or off (View > Section View, Ctrl+K)."""
+        on = bool(on)
+        self.section_bar.setVisible(on)
+        if hasattr(self, "act_section") and self.act_section.isChecked() != on:
+            self.act_section.blockSignals(True)
+            self.act_section.setChecked(on)
+            self.act_section.blockSignals(False)
+        self._section_changed()
+
+    def section(self):
+        """(axis, position, flip) of the active section, or None. The
+        position is in the coordinates of the mesh."""
+        if not self.section_bar.isVisible() or self.state is None:
+            return None
+        axis = int(self.cmb_section.currentData())
+        lo, hi = self._section_range(axis)
+        pos = lo + (hi - lo) * self.sld_section.value() / 1000.0
+        return axis, pos, self.chk_section_flip.isChecked()
+
+    def _section_range(self, axis: int):
+        b = self.state.display.bounds
+        return float(b[2 * axis]), float(b[2 * axis + 1])
+
+    def _clip(self, mesh):
+        """`mesh` on the shown side of the section; the mesh itself when
+        the section is off. Triangles fully on the shown side stay as they
+        are; only the few triangles across the plane are cut exactly (VTK
+        clip), so a coarse mesh has no triangles that stick out past the
+        plane, and a big mesh stays fast. Lines and points (the problem
+        layers): by the cell centre."""
+        sec = self.section()
+        if sec is None or mesh is None or not mesh.n_cells:
+            return mesh
+        axis, pos, flip = sec
+        if not (hasattr(mesh, "is_all_triangles") and mesh.n_faces_strict
+                and mesh.is_all_triangles):
+            c = np.asarray(mesh.cell_centers().points)[:, axis]
+            hide = (c < pos) if flip else (c > pos)
+            return mesh.remove_cells(np.nonzero(hide)[0]) if hide.any() else mesh
+        tri = np.asarray(mesh.faces).reshape(-1, 4)[:, 1:]
+        x = np.asarray(mesh.points)[:, axis][tri]
+        lo, hi = x.min(axis=1), x.max(axis=1)
+        if flip:
+            full, gone = lo >= pos, hi <= pos
+        else:
+            full, gone = hi <= pos, lo >= pos
+        across = ~(full | gone)
+        if full.all():
+            return mesh
+        keep = mesh.remove_cells(np.nonzero(~full)[0]) if not full.all() else mesh
+        if not across.any():
+            return keep
+        part = mesh.extract_cells(np.nonzero(across)[0]).extract_surface()
+        normal = [0.0, 0.0, 0.0]
+        normal[axis] = 1.0
+        origin = [0.0, 0.0, 0.0]
+        origin[axis] = pos
+        cut = part.clip(normal=normal, origin=origin, invert=not flip)
+        if cut.n_cells:
+            cut = cut.triangulate()
+            keep = keep.merge(cut, merge_points=False) if keep.n_cells else cut
+        return keep
+
+    def _section_changed(self):
+        """Draw the model again with the section (or without it)."""
+        sec = self.section()
+        if sec is None:
+            self.lbl_section.setText("")
+        else:
+            self.lbl_section.setText(
+                f"{'XYZ'[sec[0]]} = {_real(sec[1] / self.factor)} "
+                f"{self.units_text()}")
+        self._pick_cache = None
+        if self.state is not None:
+            self._show_bodies()
+            self._show_problems()
+            self._selection_changed()
+
+    def _show_cut(self, disp) -> None:
+        """The line where the plane cuts the shown bodies."""
+        v = self.view
+        v._drop("section")
+        sec = self.section()
+        if sec is None or disp is None or not disp.n_cells:
+            return
+        axis, pos, _flip = sec
+        normal = [0.0, 0.0, 0.0]
+        normal[axis] = 1.0
+        origin = list(disp.center)
+        origin[axis] = pos
+        try:
+            cut = disp.slice(normal=normal, origin=origin)
+        except Exception:                                   # noqa: BLE001
+            return
+        if cut is not None and cut.n_cells:
+            v.actors["section"] = v.plotter.add_mesh(
+                cut, color=COL_SECTION, line_width=3, name="section",
+                reset_camera=False)
+            v.plotter.render()
 
     # ------------------------------------------------------- pick in 3D view
     def eventFilter(self, obj, ev):                         # noqa: N802
@@ -612,7 +771,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         kept until the mesh or the shown bodies change."""
         st = self.state
         on = tuple(self.export_selection())
-        key = (id(st.display), on)
+        key = (id(st.display), on, self.section())
         if self._pick_cache is not None and self._pick_cache[0] == key:
             return self._pick_cache[1]
         disp = st.display
@@ -622,6 +781,12 @@ class MeshFixWindow(QtWidgets.QMainWindow):
                if geo.BODY in disp.cell_data else np.zeros(len(faces), int))
         if self.lst_bodies.count() > 1:
             keep = np.isin(ids, on)
+            faces, ids = faces[keep], ids[keep]
+        sec = self.section()
+        if sec is not None and len(faces):
+            axis, pos, flip = sec
+            c = pts[faces].mean(axis=1)[:, axis]
+            keep = (c >= pos) if flip else (c <= pos)
             faces, ids = faces[keep], ids[keep]
         v0 = pts[faces[:, 0]]
         data = (v0, pts[faces[:, 1]] - v0, pts[faces[:, 2]] - v0, ids)
@@ -675,8 +840,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             return
         disp = st.display
         ids = np.asarray(disp.cell_data[geo.BODY])
-        self.view.show_selected(
-            disp.remove_cells(np.nonzero(~np.isin(ids, rows))[0]))
+        self.view.show_selected(self._clip(
+            disp.remove_cells(np.nonzero(~np.isin(ids, rows))[0])))
 
     def selected_bodies(self) -> list:
         """The indices of the selected rows of the body list (not the
@@ -755,6 +920,13 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         for text, which in (("Iso", "iso"), ("X", "yz"), ("Y", "xz"),
                             ("Z", "xy")):
             m.addAction(text, lambda v=which: self.view.set_view(v))
+        m.addSeparator()
+        self.act_section = m.addAction("Section View")
+        self.act_section.setCheckable(True)
+        self.act_section.setShortcut(QtGui.QKeySequence("Ctrl+K"))
+        self.act_section.setToolTip(
+            "Cut the model with a plane and look inside")
+        self.act_section.toggled.connect(self.set_section)
         m.addSeparator()
         lang = m.addMenu("Language")
         self.lang_group = QtGui.QActionGroup(self)
@@ -1477,14 +1649,22 @@ class MeshFixWindow(QtWidgets.QMainWindow):
             return
         self._show_bodies(reset=reset_camera)
         d = st.diag
-        counts = {"holes": d.open_edges, "flip": d.flipped_faces,
-                  "nm": d.non_manifold_edges, "degen": d.degenerate}
-        for key, data in st.layers.items():
-            v.show_problem(key, data, counts[key])
+        self._show_problems()
         v.btn_spot.setEnabled(bool(d.open_edges or d.flipped_faces
                                    or d.degenerate))
         self._refresh_info()
         self._sync()
+
+    def _show_problems(self):
+        """The problem layers (holes, flipped, ...), cut by the section."""
+        st = self.state
+        if st is None:
+            return
+        d = st.diag
+        counts = {"holes": d.open_edges, "flip": d.flipped_faces,
+                  "nm": d.non_manifold_edges, "degen": d.degenerate}
+        for key, data in st.layers.items():
+            self.view.show_problem(key, self._clip(data), counts[key])
 
     def next_problem(self):
         """Fly the camera to the next hole, flipped part or degenerate

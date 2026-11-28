@@ -10,6 +10,10 @@ The program does not need Python.
   body, a click beside the model clears the selection. A drag still
   turns the camera. The selected bodies are orange in the 3D view.
   «Delete Selected» (key Delete) deletes them.
+- Section view: View > Section View (Ctrl+K). A plane across X, Y or Z
+  cuts the model; the bar under the 3D view moves the plane, «Other
+  side» shows the other part. The cut line is blue. The problem marks,
+  the selection and the 3D click use the same cut.
 
 ## What is new in 0.4.6
 

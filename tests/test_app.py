@@ -86,7 +86,18 @@ def wait(win, limit_ms=300_000):
 def actor_mesh(actor):
     """The mesh of an actor: foamview keeps .mesh, VTK the mapper data."""
     m = getattr(actor, "mesh", None)
-    return m if m is not None else actor.mapper.dataset
+    if m is not None:
+        return m
+    # VTK: pyvista keeps the data in mapper.dataset or only as the input of
+    # the mapper (it depends on the way add_mesh connected it): the one that
+    # has cells.
+    import pyvista as pv
+    mapper = actor.GetMapper()
+    mapper.Update()
+    found = [getattr(actor.mapper, "dataset", None),
+             pv.wrap(mapper.GetInputDataObject(0, 0))]
+    found = [f for f in found if f is not None]
+    return max(found, key=lambda f: f.n_cells)
 
 
 def poly(p_mm, t):
@@ -625,6 +636,55 @@ def part_split(win):
           and geo.body_names(win.state.mesh) == ["first", "third"],
           geo.body_names(win.state.mesh))
     win.undo()
+
+    # Section view: three cubes along X, the plane in the middle (x = 50).
+    lst.clearSelection()
+    check("section: off at the start",
+          not win.section_bar.isVisible() and win.section() is None)
+    win.act_section.trigger()               # View > Section View (Ctrl+K)
+    win.cmb_section.setCurrentIndex(0)
+    win.sld_section.setValue(500)
+    pump(300)
+    sec = win.section()
+    lo, hi = win._section_range(0)
+    check("section: on, X, in the middle of the model",
+          win.section_bar.isVisible() and sec is not None and sec[0] == 0
+          and abs(sec[1] - (lo + hi) / 2) < 1e-9, sec)
+    shown = actor_mesh(win.view.actors["body"])
+    cx = np.asarray(shown.cell_centers().points)[:, 0]
+    check("section: only the cells before the plane are shown",
+          12 < shown.n_cells < 36 and cx.max() <= sec[1] + 1e-9,
+          (shown.n_cells, cx.max()))
+    cut = win.view.actors.get("section")
+    check("section: the cut line lies on the plane",
+          cut is not None and np.allclose(
+              np.asarray(actor_mesh(cut).points)[:, 0], sec[1]),
+          None if cut is None else actor_mesh(cut).bounds)
+    check("section: the label says where the plane is",
+          win.lbl_section.text().startswith("X = "), win.lbl_section.text())
+    win.chk_section_flip.setChecked(True)
+    pump(300)
+    cx = np.asarray(actor_mesh(win.view.actors["body"]).cell_centers()
+                    .points)[:, 0]
+    check("section, other side: only the cells after the plane",
+          cx.min() >= sec[1] - 1e-9, cx.min())
+    body2 = geo.split_bodies(win.state.mesh)[0][1]       # «first», hidden now
+    c = np.asarray(body2.center)
+    cam.SetFocalPoint(*c)
+    cam.SetPosition(c[0], c[1], c[2] + 5 * body2.length)
+    cam.SetViewUp(0.0, 1.0, 0.0)
+    win.view.plotter.render()
+    pump(200)
+    check("section: a click on a hidden body selects nothing",
+          win.body_at(mid.x(), mid.y()) == -1)
+    win.set_section(False)
+    pump(300)
+    check("section off: the whole model, no cut line",
+          actor_mesh(win.view.actors["body"]).n_cells == 36
+          and "section" not in win.view.actors
+          and not win.act_section.isChecked())
+    check("section off: the hidden body can be picked again",
+          win.body_at(mid.x(), mid.y()) == 0)
 
 
 def part_step(win):
