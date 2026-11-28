@@ -3,7 +3,7 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
-## Not released yet
+## What is new in 0.4.7
 
 - Select bodies in the 3D view: a click on a body selects it in the
   list «Bodies to export» (the list opens), Ctrl+click adds or removes a
