@@ -83,6 +83,12 @@ def wait(win, limit_ms=300_000):
     return not win.busy_now
 
 
+def actor_mesh(actor):
+    """The mesh of an actor: foamview keeps .mesh, VTK the mapper data."""
+    m = getattr(actor, "mesh", None)
+    return m if m is not None else actor.mapper.dataset
+
+
 def poly(p_mm, t):
     """A mesh in mm units in the file (as most STL files from CAD)."""
     t = np.asarray(t, np.int64)
@@ -487,7 +493,7 @@ def part_split(win):
                          for i in range(2)], (swatch, style["cmap"]))
     lst.item(1).setCheckState(QtCore.Qt.Unchecked)
     pump(100)
-    shown = win.view.actors["body"].mesh
+    shown = actor_mesh(win.view.actors["body"])
     check("unchecked body: not in the 3D view, the colour of body 1 stays",
           shown.n_cells == 12
           and set(np.asarray(shown.cell_data[geo.BODY])) == {0}
@@ -506,7 +512,7 @@ def part_split(win):
     lst.item(1).setCheckState(QtCore.Qt.Checked)
     pump(100)
     check("all checked again: all in the view",
-          win.view.actors["body"].mesh.n_cells == 24)
+          actor_mesh(win.view.actors["body"]).n_cells == 24)
     files = win.export_bodies(os.path.join(TMP, "each.stl"), "stl")
     wait(win)
     check("export each body: each_1.stl, each_2.stl",
@@ -568,6 +574,57 @@ def part_split(win):
     check("delete: all selected, nothing deleted",
           not win.delete_bodies() and len(win.history) == n
           and geo.body_count(win.state.mesh) == 3)
+
+    # Select bodies in the 3D view: the camera looks down on «second»
+    # (cubes 20 mm at x 0, 40, 80 mm), a click in the centre of the view.
+    lst.clearSelection()
+    win.btn_bodies.setChecked(False)
+    pump(100)
+    cam = win.view.plotter.camera
+    body1 = geo.split_bodies(win.state.mesh)[1][1]
+    c = np.asarray(body1.center)
+    cam.SetFocalPoint(*c)
+    cam.SetPosition(c[0], c[1], c[2] + 5 * body1.length)   # outside, above
+    cam.SetViewUp(0.0, 1.0, 0.0)
+    win.view.plotter.render()
+    pump(200)
+    iw = win.view.plotter.interactor
+    mid = QtCore.QPoint(iw.width() // 2, iw.height() // 2)
+    from PySide6 import QtTest
+    QtTest.QTest.mouseClick(iw, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, mid)
+    pump(200)
+    check("3D click on a body: it is selected in the list",
+          win.selected_bodies() == [1], win.selected_bodies())
+    check("3D click: the list opens, the body is highlighted",
+          win.btn_bodies.isChecked() and "selected" in win.view.actors)
+    hb = actor_mesh(win.view.actors["selected"]).bounds
+    bb = body1.bounds
+    tol = 0.01 * body1.length
+    check("highlight: on «second», a little outside it",
+          bb[0] - tol < hb[0] <= bb[0] and bb[1] <= hb[1] < bb[1] + tol,
+          (hb, bb))
+    corner = QtCore.QPoint(3, 3)
+    QtTest.QTest.mouseClick(iw, QtCore.Qt.LeftButton,
+                            QtCore.Qt.ControlModifier, mid)
+    pump(200)
+    check("Ctrl+click on a selected body: it is removed from the selection",
+          win.selected_bodies() == [] and "selected" not in win.view.actors,
+          win.selected_bodies())
+    check("pick_at with Ctrl adds",
+          win.pick_at(mid.x(), mid.y()) == 1
+          and win.selected_bodies() == [1])
+    QtTest.QTest.mouseClick(iw, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier,
+                            corner)
+    pump(200)
+    check("3D click beside the model: no selection",
+          win.selected_bodies() == [] and "selected" not in win.view.actors)
+    QtTest.QTest.mouseClick(iw, QtCore.Qt.LeftButton, QtCore.Qt.NoModifier, mid)
+    pump(100)
+    win.act_delete.trigger()
+    check("3D selection + Delete: «second» is gone", wait(win)
+          and geo.body_names(win.state.mesh) == ["first", "third"],
+          geo.body_names(win.state.mesh))
+    win.undo()
 
 
 def part_step(win):

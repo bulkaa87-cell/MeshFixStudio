@@ -166,6 +166,55 @@ def body_color(i: int, n: int) -> str:
     return vp.COL_BODY if n <= 1 else BODY_COLORS[i % len(BODY_COLORS)]
 
 
+COL_SELECTED = "#ff9500"     # the selected bodies (as in OpenFOAM Studio)
+
+
+def pick_ray(cam, w: float, h: float, x: float, y: float):
+    """The ray (origin, unit direction) of the pixel (x, y) of a view of
+    w x h pixels (y down), for a camera with the VTK methods (VTK and
+    foamview have them). The view angle is vertical, the parallel scale is
+    half the height (as in VTK)."""
+    pos = np.asarray(cam.GetPosition(), float)
+    foc = np.asarray(cam.GetFocalPoint(), float)
+    up = np.asarray(cam.GetViewUp(), float)
+    f = foc - pos
+    f /= np.linalg.norm(f) or 1.0
+    r = np.cross(f, up)
+    r /= np.linalg.norm(r) or 1.0
+    u = np.cross(r, f)
+    nx = 2.0 * x / max(w, 1) - 1.0
+    ny = 1.0 - 2.0 * y / max(h, 1)
+    aspect = w / max(h, 1)
+    if cam.GetParallelProjection():
+        half = float(cam.GetParallelScale())
+        return pos + (nx * half * aspect) * r + (ny * half) * u, f
+    t = math.tan(math.radians(float(cam.GetViewAngle())) / 2.0)
+    d = f + (nx * t * aspect) * r + (ny * t) * u
+    return pos, d / np.linalg.norm(d)
+
+
+def first_hit(v0, e1, e2, origin, d) -> int:
+    """The index of the first triangle that the ray hits (-1: none).
+    Moller-Trumbore for all triangles at once; both sides count."""
+    if not len(v0):
+        return -1
+    p = np.cross(d, e2)
+    det = np.einsum("ij,ij->i", e1, p)
+    ok = np.abs(det) > 1e-18
+    inv = np.zeros_like(det)
+    inv[ok] = 1.0 / det[ok]
+    tv = origin - v0
+    uu = np.einsum("ij,ij->i", tv, p) * inv
+    q = np.cross(tv, e1)
+    vv = (q @ d) * inv
+    t = np.einsum("ij,ij->i", e2, q) * inv
+    hit = ok & (uu >= 0) & (vv >= 0) & (uu + vv <= 1) & (t > 0)
+    if not hit.any():
+        return -1
+    idx = np.nonzero(hit)[0]
+    return int(idx[np.argmin(t[idx])])
+
+
 class MeshViewport(vp.Viewport):
     """The shared «3D» view, without the «All» button (there is only the
     model here)."""
@@ -193,6 +242,30 @@ class MeshViewport(vp.Viewport):
                         "cmap": colors, "clim": (-0.5, n - 0.5),
                         "n_colors": k, "show_scalar_bar": False}
         return super().body_style(mesh)
+
+    def set_visible(self, key: str, visible: bool):
+        super().set_visible(key, visible)
+        if key == "body":               # the highlight goes with the body
+            super().set_visible("selected", visible)
+
+    def show_selected(self, mesh) -> None:
+        """Highlight the selected bodies: an orange, half-transparent copy
+        a little outside the surface (along the normals: two layers on the
+        same triangles flicker). None: no highlight."""
+        self._drop("selected")
+        if mesh is not None and mesh.n_cells:
+            m = mesh.copy()
+            if "Normals" not in m.point_data:
+                m = geo.display_mesh(m)
+            nrm = m.point_data.get("Normals")
+            if nrm is not None:
+                m.points = (np.asarray(m.points)
+                            + np.asarray(nrm) * (0.002 * max(m.length, 1e-12)))
+            self.actors["selected"] = self.plotter.add_mesh(
+                m, color=COL_SELECTED, opacity=0.6, smooth_shading=False,
+                show_edges=False, name="selected", reset_camera=False)
+            super().set_visible("selected", self.chk["body"].isChecked())
+        self.plotter.render()
 
 
 class MeshFixWindow(QtWidgets.QMainWindow):
@@ -317,6 +390,11 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         split = QtWidgets.QSplitter(QtCore.Qt.Horizontal)
         self.split = split
         self.view = MeshViewport()
+        # A click (no drag) on a body selects it in the list (Ctrl: add or
+        # remove). A drag still turns the camera.
+        self._press_at = None
+        self._pick_cache = None
+        self.view.plotter.interactor.installEventFilter(self)
         self.view.btn_spot.clicked.connect(self.next_problem)
         split.addWidget(self.view)
         split.addWidget(self._build_info())
@@ -423,7 +501,7 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         # Select rows (Ctrl / Shift for more) to delete them.
         self.lst_bodies.setSelectionMode(
             QtWidgets.QAbstractItemView.ExtendedSelection)
-        self.lst_bodies.itemSelectionChanged.connect(self._sync)
+        self.lst_bodies.itemSelectionChanged.connect(self._selection_changed)
         inner.addWidget(self.lst_bodies)
         self.btn_delete = QtWidgets.QPushButton("Delete Selected")
         self.btn_delete.setToolTip(
@@ -475,6 +553,8 @@ class MeshFixWindow(QtWidgets.QMainWindow):
                                else QtCore.Qt.Checked)
             lst.addItem(item)
         lst.blockSignals(False)
+        if hasattr(self, "view"):
+            self.view.show_selected(None)
         self._bodies_changed(update_view=False)
 
     def _show_bodies(self, reset: bool = False):
@@ -505,7 +585,98 @@ class MeshFixWindow(QtWidgets.QMainWindow):
         self.chk_each.setEnabled(len(on) > 1)
         if update_view:
             self._show_bodies()
+            if hasattr(self, "view"):
+                self._selection_changed()      # a hidden body: no highlight
         self._sync()
+
+    # ------------------------------------------------------- pick in 3D view
+    def eventFilter(self, obj, ev):                         # noqa: N802
+        view = getattr(self, "view", None)
+        if view is not None and obj is getattr(view.plotter, "interactor", None):
+            t = ev.type()
+            if (t == QtCore.QEvent.MouseButtonPress
+                    and ev.button() == QtCore.Qt.LeftButton):
+                self._press_at = ev.position()
+            elif (t == QtCore.QEvent.MouseButtonRelease
+                    and ev.button() == QtCore.Qt.LeftButton
+                    and self._press_at is not None):
+                d = ev.position() - self._press_at
+                self._press_at = None
+                if abs(d.x()) + abs(d.y()) <= 4:
+                    add = bool(ev.modifiers() & QtCore.Qt.ControlModifier)
+                    self.pick_at(ev.position().x(), ev.position().y(), add)
+        return super().eventFilter(obj, ev)
+
+    def _pick_data(self):
+        """Triangles of the bodies in the view (v0, e1, e2, body ids),
+        kept until the mesh or the shown bodies change."""
+        st = self.state
+        on = tuple(self.export_selection())
+        key = (id(st.display), on)
+        if self._pick_cache is not None and self._pick_cache[0] == key:
+            return self._pick_cache[1]
+        disp = st.display
+        faces = np.asarray(disp.faces).reshape(-1, 4)[:, 1:]
+        pts = np.asarray(disp.points, float)
+        ids = (np.asarray(disp.cell_data[geo.BODY])
+               if geo.BODY in disp.cell_data else np.zeros(len(faces), int))
+        if self.lst_bodies.count() > 1:
+            keep = np.isin(ids, on)
+            faces, ids = faces[keep], ids[keep]
+        v0 = pts[faces[:, 0]]
+        data = (v0, pts[faces[:, 1]] - v0, pts[faces[:, 2]] - v0, ids)
+        self._pick_cache = (key, data)
+        return data
+
+    def body_at(self, x: float, y: float) -> int:
+        """The body under the point (x, y) of the 3D view (widget pixels),
+        -1 when the ray hits no body."""
+        if self.state is None:
+            return -1
+        w = self.view.plotter.interactor
+        origin, d = pick_ray(self.view.plotter.camera, w.width(), w.height(),
+                             x, y)
+        v0, e1, e2, ids = self._pick_data()
+        i = first_hit(v0, e1, e2, origin, d)
+        return int(ids[i]) if i >= 0 else -1
+
+    def pick_at(self, x: float, y: float, add: bool = False) -> int:
+        """A click in the 3D view: select the body under it in the list
+        (add, with Ctrl: toggle it). A click beside the model clears the
+        selection. Returns the body (-1: none)."""
+        if self.state is None or self.busy_now:
+            return -1
+        body = self.body_at(x, y)
+        lst = self.lst_bodies
+        if body < 0 or body >= lst.count():
+            if not add:
+                lst.clearSelection()
+            return -1
+        item = lst.item(body)
+        if add:
+            item.setSelected(not item.isSelected())
+        else:
+            lst.clearSelection()
+            item.setSelected(True)
+        lst.scrollToItem(item)
+        if not self.btn_bodies.isChecked():
+            self.btn_bodies.setChecked(True)     # show the list and «Delete»
+        self._say(tr("Selected: {name}", name=item.text()))
+        return body
+
+    def _selection_changed(self):
+        """The rows of the list changed: highlight those bodies in 3D."""
+        self._sync()
+        st = self.state
+        shown = set(self.export_selection())
+        rows = [i for i in self.selected_bodies() if i in shown]
+        if st is None or not rows or self.lst_bodies.count() < 2:
+            self.view.show_selected(None)
+            return
+        disp = st.display
+        ids = np.asarray(disp.cell_data[geo.BODY])
+        self.view.show_selected(
+            disp.remove_cells(np.nonzero(~np.isin(ids, rows))[0]))
 
     def selected_bodies(self) -> list:
         """The indices of the selected rows of the body list (not the

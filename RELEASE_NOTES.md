@@ -3,6 +3,14 @@ VTK): open a mesh, see its problems in 3D, repair it, and export it.
 
 The program does not need Python.
 
+## Not released yet
+
+- Select bodies in the 3D view: a click on a body selects it in the
+  list «Bodies to export» (the list opens), Ctrl+click adds or removes a
+  body, a click beside the model clears the selection. A drag still
+  turns the camera. The selected bodies are orange in the 3D view.
+  «Delete Selected» (key Delete) deletes them.
+
 ## What is new in 0.4.6
 
 - Linux: the 3D view uses the graphics card also on new systems. The
