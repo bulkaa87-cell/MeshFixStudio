@@ -1,6 +1,6 @@
 ; Inno Setup script of the Windows installer of MeshFix Studio.
 ;
-;   iscc /DAppVersion=0.4.4 packaging\windows\meshfix_studio.iss
+;   iscc /DAppVersion=0.4.5 packaging\windows\meshfix_studio.iss
 ;
 ; Input: the PyInstaller folder dist\MeshFix Studio\ (see
 ; packaging\pyinstaller\meshfix_studio.spec). Output:
@@ -11,7 +11,7 @@
 ; the "Open with MeshFix Studio" entry for .stl, .obj and .ply files.
 
 #ifndef AppVersion
-  #define AppVersion "0.4.4"
+  #define AppVersion "0.4.5"
 #endif
 #define AppName "MeshFix Studio"
 #define AppExe "MeshFix Studio.exe"

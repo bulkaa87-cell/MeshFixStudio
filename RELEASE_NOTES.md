@@ -5,6 +5,11 @@ The program does not need Python.
 
 ## What is new in 0.4.5
 
+- Delete bodies: in the list «Bodies to export», select one or more
+  bodies (Ctrl or Shift for more) and click «Delete Selected», or use
+  Edit > Delete Selected Bodies (key Delete). The other bodies keep their
+  names and colours. Undo brings the bodies back. One body at least
+  stays.
 - Open STEP files (.step, .stp) of CAD programs: a 3D view of the model,
   the check, the repair, and the export to STL, 3MF, OBJ, PLY, OFF, glTF
   or VTK. OpenCASCADE makes the triangles. Each solid is a body with the
